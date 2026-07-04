@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: clientflow-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: clientflow
+      POSTGRES_PASSWORD: clientflow
+      POSTGRES_DB: clientflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - clientflow
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    container_name: clientflow-api
+    depends_on:
+      - postgres
+    env_file:
+      - apps/api/.env.example
+    environment:
+      DATABASE_URL: postgresql://clientflow:clientflow@postgres:5432/clientflow?schema=public
+      NODE_ENV: development
+    ports:
+      - "4000:4000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev -w apps/api
+    networks:
+      - clientflow
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    container_name: clientflow-web
+    depends_on:
+      - api
+    env_file:
+      - apps/web/.env.example
+    ports:
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run dev -w apps/web -- --host 0.0.0.0
+    networks:
+      - clientflow
+
+volumes:
+  postgres_data:
+
+networks:
+  clientflow:
+    driver: bridge
