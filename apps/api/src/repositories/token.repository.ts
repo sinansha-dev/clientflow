@@ -12,7 +12,10 @@ export const tokenRepository = {
   revokeRefresh(tokenHash: string, replacedByTokenHash?: string) {
     return prisma.refreshToken.update({
       where: { tokenHash },
-      data: { revokedAt: new Date(), replacedByTokenHash },
+      data: {
+        revokedAt: new Date(),
+        ...(replacedByTokenHash ? { replacedByTokenHash } : {}),
+      },
     });
   },
 

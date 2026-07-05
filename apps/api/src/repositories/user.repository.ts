@@ -64,7 +64,11 @@ export const userRepository = {
 
   async emailExists(email: string, exceptId?: string) {
     const user = await prisma.user.findFirst({
-      where: { email, deletedAt: null, id: exceptId ? { not: exceptId } : undefined },
+      where: {
+        email,
+        deletedAt: null,
+        ...(exceptId ? { id: { not: exceptId } } : {}),
+      },
       select: { id: true },
     });
     return Boolean(user);

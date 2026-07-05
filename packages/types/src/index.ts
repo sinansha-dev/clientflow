@@ -16,6 +16,6 @@ export interface AuthUser {
 export interface ApiResponse<T> {
   success: boolean;
   message: string;
-  data?: T;
-  errors?: Array<{ path: string; message: string }>;
+  data?: T | undefined;
+  errors?: Array<{ path: string; message: string }> | undefined;
 }

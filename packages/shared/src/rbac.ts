@@ -9,6 +9,6 @@ export const permissions = {
 } as const satisfies Record<Role, readonly string[]>;
 
 export function can(role: Role, permission: string): boolean {
-  const grants = permissions[role];
+  const grants: readonly string[] = permissions[role];
   return grants.includes('*') || grants.includes(permission);
 }

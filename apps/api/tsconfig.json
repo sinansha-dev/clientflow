@@ -2,9 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "rootDir": "../..",
+    "module": "CommonJS",
+    "moduleResolution": "Node",
     "types": ["node"]
   },
   "include": ["src", "prisma"]
