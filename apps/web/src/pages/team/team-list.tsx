@@ -6,18 +6,7 @@ import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
 import { Link } from 'react-router-dom';
-import {
-  Search,
-  Filter,
-  Plus,
-  Mail,
-  Shield,
-  Activity,
-  CheckCircle,
-  Clock,
-  Briefcase,
-  XCircle,
-} from 'lucide-react';
+import { Search, Plus } from 'lucide-react';
 
 interface TeamMemberSummary {
   id: string;
@@ -42,9 +31,9 @@ export function TeamListPage() {
   const notify = useToastStore((state) => state.notify);
 
   const [members, setMembers] = useState<TeamMemberSummary[]>([]);
-  const [total, setTotal] = useState(0);
+  const [, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
+  const [, setTotalPages] = useState(1);
   const [loading, setLoading] = useState(true);
 
   // Filters
@@ -456,7 +445,7 @@ export function TeamListPage() {
                   type="email"
                   value={inviteForm.email}
                   onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
-                  placeholder="name@agency.com"
+                  placeholder="name@company.com"
                   className="h-10 rounded border border-border bg-background px-3 outline-none"
                   required
                 />
@@ -511,6 +500,7 @@ export function TeamListPage() {
                   >
                     <option value="DEVELOPER">Developer</option>
                     <option value="ADMIN">Admin</option>
+                    <option value="CLIENT">Client</option>
                   </select>
                 </div>
                 <div className="grid gap-1">
@@ -537,7 +527,11 @@ export function TeamListPage() {
                     type="text"
                     value={inviteForm.jobTitle}
                     onChange={(e) => setInviteForm({ ...inviteForm, jobTitle: e.target.value })}
-                    placeholder="e.g. Senior Frontend Dev"
+                    placeholder={
+                      inviteForm.role === 'CLIENT'
+                        ? 'e.g. Client Contact'
+                        : 'e.g. Senior Frontend Dev'
+                    }
                     className="h-10 rounded border border-border bg-background px-3 outline-none"
                   />
                 </div>
@@ -547,7 +541,9 @@ export function TeamListPage() {
                     type="text"
                     value={inviteForm.department}
                     onChange={(e) => setInviteForm({ ...inviteForm, department: e.target.value })}
-                    placeholder="e.g. Engineering"
+                    placeholder={
+                      inviteForm.role === 'CLIENT' ? 'e.g. Client Portal' : 'e.g. Engineering'
+                    }
                     className="h-10 rounded border border-border bg-background px-3 outline-none"
                   />
                 </div>
@@ -583,7 +579,11 @@ export function TeamListPage() {
                   Cancel
                 </Button>
                 <Button type="submit">
-                  {inviteMode === 'INVITE' ? 'Send Invitation' : 'Create Member'}
+                  {inviteMode === 'INVITE'
+                    ? 'Send Invitation'
+                    : inviteForm.role === 'CLIENT'
+                      ? 'Create Client Login'
+                      : 'Create Member'}
                 </Button>
               </div>
             </form>
