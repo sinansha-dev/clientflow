@@ -26,6 +26,7 @@ import {
   Eye,
   Globe,
   Settings,
+  Shield,
   Archive,
   RotateCcw,
 } from 'lucide-react';
@@ -66,6 +67,15 @@ export function ClientDetailsPage() {
   // File Mutates
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Client portal login
+  const [showPortalLoginForm, setShowPortalLoginForm] = useState(false);
+  const [portalLoginForm, setPortalLoginForm] = useState({
+    email: '',
+    password: '',
+    firstName: '',
+    lastName: '',
+  });
 
   // Load client details
   const loadClientDetails = async () => {
@@ -141,6 +151,22 @@ export function ClientDetailsPage() {
     }
   };
 
+  const handleCreatePortalLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/clients/${id}/portal-login`, portalLoginForm);
+      setShowPortalLoginForm(false);
+      setPortalLoginForm({ email: '', password: '', firstName: '', lastName: '' });
+      notify({
+        type: 'success',
+        title: 'Client Login Created',
+        message: 'Client can now log in and access the portal',
+      });
+      loadClientDetails();
+    } catch (err) {
+      notify({ type: 'error', title: 'Portal Login Failed', message: errorMessage(err) });
+    }
+  };
   const handleArchiveRestoreClient = async () => {
     const isArchived = client.status === 'ARCHIVED';
     const action = isArchived ? 'restore' : 'archive';
@@ -330,6 +356,23 @@ export function ClientDetailsPage() {
               {client.status === 'ARCHIVED' ? 'Restore Client' : 'Archive Client'}
             </Button>
             <Button
+              variant="ghost"
+              onClick={() => {
+                const primaryContact = client.contacts?.find((contact) => contact.primaryContact);
+                const [firstName = '', ...lastNameParts] = (primaryContact?.name ?? '').split(' ');
+                setPortalLoginForm({
+                  email: primaryContact?.email || client.email || '',
+                  password: '',
+                  firstName,
+                  lastName: lastNameParts.join(' '),
+                });
+                setShowPortalLoginForm(true);
+              }}
+              className="flex items-center gap-2"
+            >
+              <Shield className="h-4 w-4" /> Portal Login
+            </Button>
+            <Button
               onClick={() => setIsEditingClient(!isEditingClient)}
               className="flex items-center gap-2"
             >
@@ -369,6 +412,53 @@ export function ClientDetailsPage() {
 
       {/* Detail Layout */}
       <div className="grid gap-6">
+        {/* --- CLIENT PORTAL LOGIN PANEL --- */}
+        {showPortalLoginForm && (
+          <Card className="border border-primary/20 bg-primary/5">
+            <h2 className="text-base font-bold mb-4">Create Client Portal Login</h2>
+            <form onSubmit={handleCreatePortalLogin} className="grid gap-4 sm:grid-cols-2">
+              <Input
+                label="Email Address"
+                type="email"
+                value={portalLoginForm.email}
+                onChange={(e) => setPortalLoginForm({ ...portalLoginForm, email: e.target.value })}
+                required
+              />
+              <Input
+                label="Initial Password"
+                type="password"
+                value={portalLoginForm.password}
+                onChange={(e) =>
+                  setPortalLoginForm({ ...portalLoginForm, password: e.target.value })
+                }
+                minLength={6}
+                required
+              />
+              <Input
+                label="First Name"
+                value={portalLoginForm.firstName}
+                onChange={(e) =>
+                  setPortalLoginForm({ ...portalLoginForm, firstName: e.target.value })
+                }
+                required
+              />
+              <Input
+                label="Last Name"
+                value={portalLoginForm.lastName}
+                onChange={(e) =>
+                  setPortalLoginForm({ ...portalLoginForm, lastName: e.target.value })
+                }
+                required
+              />
+              <div className="sm:col-span-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setShowPortalLoginForm(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">Create Login</Button>
+              </div>
+            </form>
+          </Card>
+        )}
         {/* --- EDIT CLIENT PANEL --- */}
         {isEditingClient && (
           <Card className="border border-primary/20 bg-primary/5">

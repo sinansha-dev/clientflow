@@ -1,5 +1,5 @@
 import { Bell, Menu, Moon, Search, Sun, UserCircle } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/auth-store';
 import { useThemeStore } from '../stores/theme-store';
@@ -13,12 +13,19 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const crumbs = location.pathname.split('/').filter(Boolean);
+  const visibleNavItems = navItems.filter((item) => user && item.roles.includes(user.role));
+
+  useEffect(() => {
+    if (user?.role === 'CLIENT' && !['/portal', '/profile'].includes(location.pathname)) {
+      navigate('/portal', { replace: true });
+    }
+  }, [location.pathname, navigate, user]);
 
   const sidebar = (
     <aside className="flex h-full w-72 flex-col border-r border-border bg-card">
       <div className="flex h-16 items-center px-5 text-lg font-bold text-primary">ClientFlow</div>
       <nav className="grid gap-1 px-3">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <NavLink
             key={item.href}
             to={item.href}

@@ -1,4 +1,5 @@
 import type { Request, Response } from 'express';
+import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { clientRepository } from '../repositories/client.repository';
 import { activityService } from '../services/activity.service';
@@ -19,7 +20,7 @@ export const clientController = {
       resolvedManagerId = user.id;
     }
 
-    const params: any = {};
+    const params: Parameters<typeof clientRepository.list>[0] = {};
     if (search) params.search = search as string;
     if (status) params.status = status as string;
     if (industry) params.industry = industry as string;
@@ -88,6 +89,70 @@ export const clientController = {
     return ok(res, 'Client created successfully', createdClient, 201);
   },
 
+  async createPortalLogin(req: Request, res: Response) {
+    const id = req.params.id!;
+    const { email, password, firstName, lastName } = req.body;
+
+    const client = await clientRepository.findById(id);
+    if (!client) {
+      throw notFound('Client not found');
+    }
+
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser && existingUser.role !== 'CLIENT') {
+      return res.status(400).json({
+        success: false,
+        message: 'This email already belongs to a staff account',
+      });
+    }
+
+    const user = existingUser
+      ? await prisma.user.update({
+          where: { id: existingUser.id },
+          data: {
+            firstName,
+            lastName,
+            status: 'ACTIVE',
+            ...(password ? { password: await bcrypt.hash(password, 12) } : {}),
+          },
+        })
+      : await prisma.user.create({
+          data: {
+            email,
+            password: await bcrypt.hash(password, 12),
+            firstName,
+            lastName,
+            role: 'CLIENT',
+            status: 'ACTIVE',
+          },
+        });
+
+    await prisma.clientPortalAccess.upsert({
+      where: { clientId_userId: { clientId: id, userId: user.id } },
+      create: { clientId: id, userId: user.id, status: 'ACTIVE' },
+      update: { status: 'ACTIVE' },
+    });
+
+    await activityService.log(
+      id,
+      'PORTAL_ACCESS_CREATED',
+      `Portal login enabled for ${firstName} ${lastName}`,
+    );
+
+    return ok(
+      res,
+      'Client portal login created successfully',
+      {
+        id: user.id,
+        email: user.email,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        role: user.role,
+        status: user.status,
+      },
+      201,
+    );
+  },
   async update(req: Request, res: Response) {
     const user = req.user!;
     const id = req.params.id!;

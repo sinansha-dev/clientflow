@@ -500,7 +500,6 @@ export function TeamListPage() {
                   >
                     <option value="DEVELOPER">Developer</option>
                     <option value="ADMIN">Admin</option>
-                    <option value="CLIENT">Client</option>
                   </select>
                 </div>
                 <div className="grid gap-1">
@@ -527,11 +526,7 @@ export function TeamListPage() {
                     type="text"
                     value={inviteForm.jobTitle}
                     onChange={(e) => setInviteForm({ ...inviteForm, jobTitle: e.target.value })}
-                    placeholder={
-                      inviteForm.role === 'CLIENT'
-                        ? 'e.g. Client Contact'
-                        : 'e.g. Senior Frontend Dev'
-                    }
+                    placeholder="e.g. Senior Frontend Dev"
                     className="h-10 rounded border border-border bg-background px-3 outline-none"
                   />
                 </div>
@@ -541,9 +536,7 @@ export function TeamListPage() {
                     type="text"
                     value={inviteForm.department}
                     onChange={(e) => setInviteForm({ ...inviteForm, department: e.target.value })}
-                    placeholder={
-                      inviteForm.role === 'CLIENT' ? 'e.g. Client Portal' : 'e.g. Engineering'
-                    }
+                    placeholder="e.g. Engineering"
                     className="h-10 rounded border border-border bg-background px-3 outline-none"
                   />
                 </div>
@@ -579,11 +572,7 @@ export function TeamListPage() {
                   Cancel
                 </Button>
                 <Button type="submit">
-                  {inviteMode === 'INVITE'
-                    ? 'Send Invitation'
-                    : inviteForm.role === 'CLIENT'
-                      ? 'Create Client Login'
-                      : 'Create Member'}
+                  {inviteMode === 'INVITE' ? 'Send Invitation' : 'Create Member'}
                 </Button>
               </div>
             </form>

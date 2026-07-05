@@ -23,6 +23,8 @@ import { CalendarWorkspacePage } from './pages/calendar/calendar-workspace';
 import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
 import { ClientPortalPage } from './pages/portal/client-portal';
 
+const staffOnly = ['ADMIN', 'DEVELOPER'] as const;
+
 export const router = createBrowserRouter([
   {
     element: <AuthLayout />,
@@ -40,20 +42,111 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: '/', element: <Navigate to="/dashboard" replace /> },
-      { path: '/dashboard', element: <DashboardPage /> },
-      { path: '/clients', element: <ClientsListPage /> },
-      { path: '/clients/:id', element: <ClientDetailsPage /> },
-      { path: '/projects', element: <ProjectsListPage /> },
-      { path: '/projects/:id', element: <ProjectDetailsPage /> },
+      {
+        path: '/dashboard',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <DashboardPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/clients',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <ClientsListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/clients/:id',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <ClientDetailsPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/projects',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <ProjectsListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/projects/:id',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <ProjectDetailsPage />
+          </ProtectedRoute>
+        ),
+      },
       { path: '/portal', element: <ClientPortalPage /> },
-      { path: '/tasks', element: <TasksLayoutPage /> },
-      { path: '/timesheets', element: <TimesheetWorkspacePage /> },
-      { path: '/calendar', element: <CalendarWorkspacePage /> },
-      { path: '/team', element: <TeamListPage /> },
-      { path: '/team/:id', element: <TeamProfilePage /> },
-      { path: '/invoices', element: <PlaceholderPage title="Invoices" /> },
-      { path: '/reports', element: <ReportsWorkspacePage /> },
-      { path: '/settings', element: <PlaceholderPage title="Settings" /> },
+      {
+        path: '/tasks',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <TasksLayoutPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/timesheets',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <TimesheetWorkspacePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/calendar',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <CalendarWorkspacePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/team',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <TeamListPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/team/:id',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <TeamProfilePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/invoices',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <PlaceholderPage title="Invoices" />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/reports',
+        element: (
+          <ProtectedRoute roles={[...staffOnly]}>
+            <ReportsWorkspacePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/settings',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <PlaceholderPage title="Settings" />
+          </ProtectedRoute>
+        ),
+      },
       { path: '/profile', element: <ProfilePage /> },
       {
         path: '/users',

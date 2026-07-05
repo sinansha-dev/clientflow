@@ -17,6 +17,12 @@ import { validate } from '../middleware/validate';
 
 export const clientRoutes = Router();
 const idParams = z.object({ id: uuidSchema });
+const portalLoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(6),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+});
 
 // Configure file upload directory
 const uploadDir = path.join(__dirname, '../../uploads');
@@ -37,7 +43,7 @@ const storage = multer.diskStorage({
 });
 
 // File Type Filter
-const fileFilter = (_req: any, file: any, cb: any) => {
+const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   const allowedTypes = [
     'application/pdf',
     'image/jpeg',
@@ -75,6 +81,13 @@ clientRoutes.post('/', requireRole('ADMIN'), validate(createClientSchema), (req,
   clientController.create(req, res).catch(next),
 );
 
+clientRoutes.post(
+  '/:id/portal-login',
+  requireRole('ADMIN'),
+  validate(idParams, 'params'),
+  validate(portalLoginSchema),
+  (req, res, next) => clientController.createPortalLogin(req, res).catch(next),
+);
 clientRoutes.get(
   '/:id',
   requireRole('ADMIN', 'DEVELOPER'),
