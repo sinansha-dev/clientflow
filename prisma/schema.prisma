@@ -20,30 +20,37 @@ enum UserStatus {
 }
 
 model User {
-  id            String         @id @default(uuid()) @db.Uuid
-  firstName     String
-  lastName      String
-  email         String         @unique
-  password      String
-  avatar        String?
-  phone         String?
-  role          Role           @default(CLIENT)
-  status        UserStatus     @default(ACTIVE)
-  emailVerified Boolean        @default(false)
-  lastLogin     DateTime?
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  deletedAt     DateTime?
-  refreshTokens RefreshToken[]
-  resetTokens   PasswordResetToken[]
-  managedClients Client[]       @relation("ManagerClients")
-  clientNotes    ClientNote[]
-  projectTeams   ProjectTeam[]
-  managedProjects Project[]     @relation("ProjectManager")
-  projectNotes   ProjectNote[]
-  assignedTasks   Task[]         @relation("TaskAssignees")
-  taskComments    TaskComment[]
-  taskAttachments TaskAttachment[] @relation("TaskAttachmentUploader")
+  id                          String               @id @default(uuid()) @db.Uuid
+  firstName                   String
+  lastName                    String
+  email                       String               @unique
+  password                    String
+  avatar                      String?
+  phone                       String?
+  role                        Role                 @default(CLIENT)
+  status                      UserStatus           @default(ACTIVE)
+  emailVerified               Boolean              @default(false)
+  lastLogin                   DateTime?
+  createdAt                   DateTime             @default(now())
+  updatedAt                   DateTime             @updatedAt
+  deletedAt                   DateTime?
+  refreshTokens               RefreshToken[]
+  resetTokens                 PasswordResetToken[]
+  managedClients              Client[]             @relation("ManagerClients")
+  clientNotes                 ClientNote[]
+  projectTeams                ProjectTeam[]
+  managedProjects             Project[]            @relation("ProjectManager")
+  projectNotes                ProjectNote[]
+  assignedTasks               Task[]               @relation("TaskAssignees")
+  taskComments                TaskComment[]
+  taskAttachments             TaskAttachment[]     @relation("TaskAttachmentUploader")
+  portalAccesses              ClientPortalAccess[]
+  uploadedProjectFiles        ProjectFile[]        @relation("ProjectFileUploader")
+  uploadedProjectFileVersions ProjectFileVersion[] @relation("ProjectFileVersionUploader")
+  portalMessages              PortalMessage[]
+  portalActivities            PortalActivity[]
+  revisionRequests            RevisionRequest[]
+  fileDownloads               FileDownload[]
 
   // Workforce Management fields (Phase 5)
   employeeId         String?
@@ -51,18 +58,18 @@ model User {
   department         String?
   skills             String[]
   hourlyRate         Float?
-  employmentType     String?         // Full-Time, Part-Time, Freelancer, Contractor
+  employmentType     String? // Full-Time, Part-Time, Freelancer, Contractor
   joinDate           DateTime?
-  managerId          String?         @db.Uuid
-  manager            User?           @relation("UserManager", fields: [managerId], references: [id])
-  subordinates       User[]          @relation("UserManager")
-  availabilityStatus String          @default("OFFLINE") // Available, Busy, In Meeting, On Leave, Offline
-  timezone           String          @default("UTC")
+  managerId          String?   @db.Uuid
+  manager            User?     @relation("UserManager", fields: [managerId], references: [id])
+  subordinates       User[]    @relation("UserManager")
+  availabilityStatus String    @default("OFFLINE") // Available, Busy, In Meeting, On Leave, Offline
+  timezone           String    @default("UTC")
 
-  timeLogs           TimeLog[]
-  meetingsOrganized  Meeting[]       @relation("OrganizerMeetings")
-  meetingsAttending  MeetingParticipant[]
-  calendarEvents     CalendarEvent[]
+  timeLogs          TimeLog[]
+  meetingsOrganized Meeting[]            @relation("OrganizerMeetings")
+  meetingsAttending MeetingParticipant[]
+  calendarEvents    CalendarEvent[]
 
   @@index([email])
   @@index([role])
@@ -70,13 +77,13 @@ model User {
 }
 
 model RefreshToken {
-  id        String    @id @default(uuid()) @db.Uuid
-  tokenHash String    @unique
-  userId    String    @db.Uuid
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expiresAt DateTime
-  revokedAt DateTime?
-  createdAt DateTime  @default(now())
+  id                  String    @id @default(uuid()) @db.Uuid
+  tokenHash           String    @unique
+  userId              String    @db.Uuid
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt           DateTime
+  revokedAt           DateTime?
+  createdAt           DateTime  @default(now())
   replacedByTokenHash String?
 
   @@index([userId])
@@ -97,8 +104,8 @@ model PasswordResetToken {
 }
 
 model Client {
-  id                String           @id @default(uuid()) @db.Uuid
-  companyName       String           @unique
+  id                String    @id @default(uuid()) @db.Uuid
+  companyName       String    @unique
   companyLogo       String?
   industry          String
   website           String
@@ -111,22 +118,24 @@ model Client {
   state             String
   city              String
   postalCode        String
-  currency          String           @default("USD")
-  timezone          String           @default("UTC")
-  status            String           @default("ACTIVE")
+  currency          String    @default("USD")
+  timezone          String    @default("UTC")
+  status            String    @default("ACTIVE")
   source            String?
-  assignedManagerId String?          @db.Uuid
-  assignedManager   User?            @relation("ManagerClients", fields: [assignedManagerId], references: [id])
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
+  assignedManagerId String?   @db.Uuid
+  assignedManager   User?     @relation("ManagerClients", fields: [assignedManagerId], references: [id])
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   archivedAt        DateTime?
   deletedAt         DateTime?
 
-  contacts        ClientContact[]
-  notes           ClientNote[]
-  files           ClientFile[]
-  activities      ClientActivity[]
-  projects        Project[]
+  contacts             ClientContact[]
+  notes                ClientNote[]
+  files                ClientFile[]
+  activities           ClientActivity[]
+  projects             Project[]
+  portalAccesses       ClientPortalAccess[]
+  deliverableApprovals DeliverableApproval[]
 
   @@index([deletedAt])
   @@index([archivedAt])
@@ -175,52 +184,57 @@ model ClientFile {
 }
 
 model ClientActivity {
-  id        String   @id @default(uuid()) @db.Uuid
-  clientId  String   @db.Uuid
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  type      String
+  id          String   @id @default(uuid()) @db.Uuid
+  clientId    String   @db.Uuid
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  type        String
   description String
-  createdAt DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([clientId])
 }
 
 model Project {
-  id                String           @id @default(uuid()) @db.Uuid
-  clientId          String           @db.Uuid
-  client            Client           @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectName       String
-  projectCode       String           @unique
-  description       String
-  status            String           @default("PLANNING")
-  priority          String           @default("MEDIUM")
-  budget            Float
-  estimatedHours    Float
-  actualHours       Float            @default(0)
-  startDate         DateTime
-  deadline          DateTime
-  completionDate    DateTime?
-  progress          Float            @default(0)
-  healthStatus      String           @default("HEALTHY")
-  projectManagerId  String           @db.Uuid
-  projectManager    User             @relation("ProjectManager", fields: [projectManagerId], references: [id])
-  createdBy         String           @db.Uuid
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  archivedAt        DateTime?
-  deletedAt         DateTime?
+  id               String    @id @default(uuid()) @db.Uuid
+  clientId         String    @db.Uuid
+  client           Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectName      String
+  projectCode      String    @unique
+  description      String
+  status           String    @default("PLANNING")
+  priority         String    @default("MEDIUM")
+  budget           Float
+  estimatedHours   Float
+  actualHours      Float     @default(0)
+  startDate        DateTime
+  deadline         DateTime
+  completionDate   DateTime?
+  progress         Float     @default(0)
+  healthStatus     String    @default("HEALTHY")
+  projectManagerId String    @db.Uuid
+  projectManager   User      @relation("ProjectManager", fields: [projectManagerId], references: [id])
+  createdBy        String    @db.Uuid
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  archivedAt       DateTime?
+  deletedAt        DateTime?
 
-  teamMembers       ProjectTeam[]
-  milestones        Milestone[]
-  notes             ProjectNote[]
-  files             ProjectFile[]
-  meetings          ProjectMeeting[]
-  deployments       ProjectDeployment[]
-  activities        ProjectActivity[]
-  tasks             Task[]
-  timeLogs          TimeLog[]
-  meetingsLinked    Meeting[]
-  calendarEvents    CalendarEvent[]
+  teamMembers          ProjectTeam[]
+  milestones           Milestone[]
+  notes                ProjectNote[]
+  files                ProjectFile[]
+  meetings             ProjectMeeting[]
+  deployments          ProjectDeployment[]
+  activities           ProjectActivity[]
+  tasks                Task[]
+  timeLogs             TimeLog[]
+  meetingsLinked       Meeting[]
+  calendarEvents       CalendarEvent[]
+  portalFolders        PortalFolder[]
+  deliverableApprovals DeliverableApproval[]
+  revisionRequests     RevisionRequest[]
+  portalMessages       PortalMessage[]
+  portalActivities     PortalActivity[]
 
   @@index([clientId])
   @@index([projectManagerId])
@@ -272,30 +286,52 @@ model ProjectNote {
 }
 
 model ProjectFile {
-  id        String   @id @default(uuid()) @db.Uuid
-  projectId String   @db.Uuid
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name      String
-  type      String
-  size      Int
-  url       String
-  folder    String   @default("DOCUMENTS") // Design, Source Code, Contracts, Assets, Documents, Deliverables
-  createdAt DateTime @default(now())
+  id                 String                    @id @default(uuid()) @db.Uuid
+  projectId          String                    @db.Uuid
+  project            Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  folderId           String?                   @db.Uuid
+  folderNode         PortalFolder?             @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  name               String
+  originalFileName   String?
+  type               String
+  size               Int
+  url                String
+  storagePath        String?
+  folder             String                    @default("DOCUMENTS")
+  uploadedById       String?                   @db.Uuid
+  uploadedBy         User?                     @relation("ProjectFileUploader", fields: [uploadedById], references: [id])
+  version            Int                       @default(1)
+  visibility         String                    @default("INTERNAL")
+  downloadCount      Int                       @default(0)
+  deliverableStatus  String                    @default("DRAFT")
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+  deletedAt          DateTime?
+  versions           ProjectFileVersion[]
+  approvals          DeliverableApproval[]     @relation("DeliverableApprovals")
+  revisionRequests   RevisionRequest[]         @relation("DeliverableRevisions")
+  downloadLogs       FileDownload[]
+  messageAttachments PortalMessageAttachment[]
 
   @@index([projectId])
+  @@index([folderId])
+  @@index([uploadedById])
+  @@index([visibility])
+  @@index([deliverableStatus])
+  @@index([deletedAt])
 }
 
 model ProjectMeeting {
-  id          String   @id @default(uuid()) @db.Uuid
-  projectId   String   @db.Uuid
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  title       String
-  date        DateTime
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @db.Uuid
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title        String
+  date         DateTime
   participants String
-  platform    String
-  notes       String?  @db.Text
-  actionItems String?  @db.Text
-  createdAt   DateTime @default(now())
+  platform     String
+  notes        String?  @db.Text
+  actionItems  String?  @db.Text
+  createdAt    DateTime @default(now())
 
   @@index([projectId])
 }
@@ -330,36 +366,36 @@ model ProjectActivity {
 }
 
 model Task {
-  id              String           @id @default(uuid()) @db.Uuid
-  projectId       String           @db.Uuid
-  project         Project          @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  parentTaskId    String?          @db.Uuid
-  parentTask      Task?            @relation("Subtasks", fields: [parentTaskId], references: [id])
-  subtasks        Task[]           @relation("Subtasks")
-  title           String
-  description     String?          @db.Text
-  status          String           @default("TODO")
-  priority        String           @default("MEDIUM")
-  estimatedHours  Float            @default(0)
-  actualHours     Float            @default(0)
-  storyPoints     Int?
-  startDate       DateTime?
-  dueDate         DateTime?
-  completedAt     DateTime?
-  position        Float            @default(0)
-  createdBy       String           @db.Uuid
-  updatedBy       String?          @db.Uuid
-  createdAt       DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  deletedAt       DateTime?
+  id             String    @id @default(uuid()) @db.Uuid
+  projectId      String    @db.Uuid
+  project        Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentTaskId   String?   @db.Uuid
+  parentTask     Task?     @relation("Subtasks", fields: [parentTaskId], references: [id])
+  subtasks       Task[]    @relation("Subtasks")
+  title          String
+  description    String?   @db.Text
+  status         String    @default("TODO")
+  priority       String    @default("MEDIUM")
+  estimatedHours Float     @default(0)
+  actualHours    Float     @default(0)
+  storyPoints    Int?
+  startDate      DateTime?
+  dueDate        DateTime?
+  completedAt    DateTime?
+  position       Float     @default(0)
+  createdBy      String    @db.Uuid
+  updatedBy      String?   @db.Uuid
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
-  assignees       User[]           @relation("TaskAssignees")
-  comments        TaskComment[]
-  checklist       TaskChecklist[]
-  attachments     TaskAttachment[]
-  activities      TaskActivity[]
-  labels          TaskLabel[]      @relation("TaskLabels")
-  timeLogs        TimeLog[]
+  assignees   User[]           @relation("TaskAssignees")
+  comments    TaskComment[]
+  checklist   TaskChecklist[]
+  attachments TaskAttachment[]
+  activities  TaskActivity[]
+  labels      TaskLabel[]      @relation("TaskLabels")
+  timeLogs    TimeLog[]
 
   @@index([projectId])
   @@index([parentTaskId])
@@ -383,12 +419,12 @@ model TaskComment {
 }
 
 model TaskChecklist {
-  id        String   @id @default(uuid()) @db.Uuid
-  taskId    String   @db.Uuid
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid()) @db.Uuid
+  taskId    String  @db.Uuid
+  task      Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
   title     String
-  completed Boolean  @default(false)
-  order     Int      @default(0)
+  completed Boolean @default(false)
+  order     Int     @default(0)
 
   @@index([taskId])
 }
@@ -409,10 +445,10 @@ model TaskAttachment {
 }
 
 model TaskLabel {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @unique
-  color     String   @default("#3B82F6")
-  tasks     Task[]   @relation("TaskLabels")
+  id    String @id @default(uuid()) @db.Uuid
+  name  String @unique
+  color String @default("#3B82F6")
+  tasks Task[] @relation("TaskLabels")
 }
 
 model TaskActivity {
@@ -471,11 +507,11 @@ model Meeting {
 }
 
 model MeetingParticipant {
-  meetingId        String   @db.Uuid
-  meeting          Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  userId           String   @db.Uuid
-  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  attendanceStatus String   @default("INVITED") // Invited, Accepted, Declined, Attended
+  meetingId        String  @db.Uuid
+  meeting          Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  userId           String  @db.Uuid
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  attendanceStatus String  @default("INVITED") // Invited, Accepted, Declined, Attended
 
   @@id([meetingId, userId])
   @@index([meetingId])
@@ -496,4 +532,162 @@ model CalendarEvent {
 
   @@index([userId])
   @@index([projectId])
+}
+
+model ClientPortalAccess {
+  id        String    @id @default(uuid()) @db.Uuid
+  clientId  String    @db.Uuid
+  client    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastLogin DateTime?
+  status    String    @default("PENDING_INVITATION")
+  createdAt DateTime  @default(now())
+
+  @@unique([clientId, userId])
+  @@index([clientId])
+  @@index([userId])
+  @@index([status])
+}
+
+model PortalFolder {
+  id             String         @id @default(uuid()) @db.Uuid
+  projectId      String         @db.Uuid
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  parentFolderId String?        @db.Uuid
+  parentFolder   PortalFolder?  @relation("PortalFolderTree", fields: [parentFolderId], references: [id], onDelete: Cascade)
+  childFolders   PortalFolder[] @relation("PortalFolderTree")
+  folderName     String
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  deletedAt      DateTime?
+  files          ProjectFile[]
+
+  @@unique([projectId, parentFolderId, folderName])
+  @@index([projectId])
+  @@index([parentFolderId])
+  @@index([deletedAt])
+}
+
+model ProjectFileVersion {
+  id               String      @id @default(uuid()) @db.Uuid
+  fileId           String      @db.Uuid
+  file             ProjectFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  version          Int
+  fileName         String
+  originalFileName String
+  fileType         String
+  fileSize         Int
+  storagePath      String
+  uploadedById     String      @db.Uuid
+  uploadedBy       User        @relation("ProjectFileVersionUploader", fields: [uploadedById], references: [id])
+  createdAt        DateTime    @default(now())
+
+  @@unique([fileId, version])
+  @@index([fileId])
+  @@index([uploadedById])
+}
+
+model DeliverableApproval {
+  id            String      @id @default(uuid()) @db.Uuid
+  projectId     String      @db.Uuid
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverableId String      @db.Uuid
+  deliverable   ProjectFile @relation("DeliverableApprovals", fields: [deliverableId], references: [id], onDelete: Cascade)
+  clientId      String      @db.Uuid
+  client        Client      @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  status        String      @default("PENDING")
+  comments      String?     @db.Text
+  approvedAt    DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([deliverableId])
+  @@index([clientId])
+  @@index([status])
+}
+
+model RevisionRequest {
+  id            String      @id @default(uuid()) @db.Uuid
+  projectId     String      @db.Uuid
+  project       Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deliverableId String      @db.Uuid
+  deliverable   ProjectFile @relation("DeliverableRevisions", fields: [deliverableId], references: [id], onDelete: Cascade)
+  requestedById String      @db.Uuid
+  requestedBy   User        @relation(fields: [requestedById], references: [id])
+  description   String      @db.Text
+  priority      String      @default("MEDIUM")
+  status        String      @default("OPEN")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([deliverableId])
+  @@index([requestedById])
+  @@index([status])
+}
+
+model PortalMessage {
+  id           String                    @id @default(uuid()) @db.Uuid
+  projectId    String                    @db.Uuid
+  project      Project                   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId     String                    @db.Uuid
+  author       User                      @relation(fields: [authorId], references: [id])
+  body         String                    @db.Text
+  internalOnly Boolean                   @default(false)
+  edited       Boolean                   @default(false)
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+  deletedAt    DateTime?
+  attachments  PortalMessageAttachment[]
+
+  @@index([projectId])
+  @@index([authorId])
+  @@index([internalOnly])
+  @@index([deletedAt])
+}
+
+model PortalMessageAttachment {
+  id        String        @id @default(uuid()) @db.Uuid
+  messageId String        @db.Uuid
+  message   PortalMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fileId    String?       @db.Uuid
+  file      ProjectFile?  @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  name      String
+  url       String
+  fileType  String
+  fileSize  Int
+  createdAt DateTime      @default(now())
+
+  @@index([messageId])
+  @@index([fileId])
+}
+
+model PortalActivity {
+  id          String   @id @default(uuid()) @db.Uuid
+  projectId   String   @db.Uuid
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId      String?  @db.Uuid
+  user        User?    @relation(fields: [userId], references: [id])
+  type        String
+  description String
+  createdAt   DateTime @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+  @@index([type])
+}
+
+model FileDownload {
+  id        String      @id @default(uuid()) @db.Uuid
+  fileId    String      @db.Uuid
+  file      ProjectFile @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  userId    String      @db.Uuid
+  user      User        @relation(fields: [userId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@index([fileId])
+  @@index([userId])
+  @@index([createdAt])
 }

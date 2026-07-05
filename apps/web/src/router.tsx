@@ -21,6 +21,7 @@ import { TeamProfilePage } from './pages/team/team-profile';
 import { TimesheetWorkspacePage } from './pages/timesheets/timesheet-workspace';
 import { CalendarWorkspacePage } from './pages/calendar/calendar-workspace';
 import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
+import { ClientPortalPage } from './pages/portal/client-portal';
 
 export const router = createBrowserRouter([
   {
@@ -44,6 +45,7 @@ export const router = createBrowserRouter([
       { path: '/clients/:id', element: <ClientDetailsPage /> },
       { path: '/projects', element: <ProjectsListPage /> },
       { path: '/projects/:id', element: <ProjectDetailsPage /> },
+      { path: '/portal', element: <ClientPortalPage /> },
       { path: '/tasks', element: <TasksLayoutPage /> },
       { path: '/timesheets', element: <TimesheetWorkspacePage /> },
       { path: '/calendar', element: <CalendarWorkspacePage /> },

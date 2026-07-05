@@ -12,6 +12,14 @@ import { taskRoutes, labelRoutes } from './routes/task.routes';
 import { teamRoutes } from './routes/team.routes';
 import { timelogRoutes, timerRoutes } from './routes/timelog.routes';
 import { meetingRoutes, calendarRoutes } from './routes/meeting.routes';
+import {
+  portalRoutes,
+  fileRoutes,
+  folderRoutes,
+  approvalRoutes,
+  revisionRoutes,
+  messageRoutes,
+} from './routes/portal.routes';
 import { env } from './config/env';
 import { cookieSecret } from './utils/cookies';
 import { errorMiddleware } from './middleware/error';
@@ -56,6 +64,12 @@ app.use('/timelogs', timelogRoutes);
 app.use('/timer', timerRoutes);
 app.use('/meetings', meetingRoutes);
 app.use('/calendar', calendarRoutes);
+app.use('/portal', portalRoutes);
+app.use('/files', fileRoutes);
+app.use('/folders', folderRoutes);
+app.use('/approvals', approvalRoutes);
+app.use('/revisions', revisionRoutes);
+app.use('/messages', messageRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found', errors: [] });

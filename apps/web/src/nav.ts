@@ -9,12 +9,14 @@ import {
   Users,
   UsersRound,
   Clock,
+  ShieldCheck,
 } from 'lucide-react';
 
 export const navItems = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Clients', href: '/clients', icon: UsersRound },
   { label: 'Projects', href: '/projects', icon: FolderKanban },
+  { label: 'Client Portal', href: '/portal', icon: ShieldCheck },
   { label: 'Tasks', href: '/tasks', icon: ListTodo },
   { label: 'Timesheets', href: '/timesheets', icon: Clock },
   { label: 'Calendar', href: '/calendar', icon: CalendarDays },

@@ -10,6 +10,10 @@ export const userService = {
     return userRepository.list();
   },
 
+  listStaffOptions() {
+    return userRepository.listStaff();
+  },
+
   async createUser(input: CreateUserInput) {
     if (await userRepository.emailExists(input.email)) {
       throw new AppError(409, 'Email is already in use');

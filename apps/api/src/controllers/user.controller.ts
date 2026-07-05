@@ -21,6 +21,10 @@ export const userController = {
     return ok(res, 'Users loaded', { users: await userService.listUsers() });
   },
 
+  async staff(req: Request, res: Response) {
+    return ok(res, 'Staff loaded', { users: await userService.listStaffOptions() });
+  },
+
   async create(req: Request, res: Response) {
     const user = await userService.createUser(req.body);
     return ok(res, 'User created', { user }, 201);

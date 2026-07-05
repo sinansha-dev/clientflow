@@ -1,6 +1,8 @@
 import { z } from 'zod';
 
 export const uuidSchema = z.string().uuid();
+export const requiredUuidSchema = (label: string) =>
+  z.string().trim().min(1, `${label} is required`).uuid(`Invalid ${label.toLowerCase()}`);
 export const emailSchema = z.string().trim().email().toLowerCase();
 export const phoneSchema = z
   .string()
@@ -107,7 +109,7 @@ export const projectTeamMemberSchema = z.object({
 });
 
 export const createProjectBaseSchema = z.object({
-  clientId: uuidSchema,
+  clientId: requiredUuidSchema('Client'),
   projectName: z.string().trim().min(1, 'Project name is required').max(150),
   description: z.string().trim().min(1, 'Description is required'),
   startDate: z.string().or(z.date()),
@@ -130,7 +132,7 @@ export const createProjectBaseSchema = z.object({
       'CANCELLED',
     ])
     .default('PLANNING'),
-  projectManagerId: uuidSchema,
+  projectManagerId: requiredUuidSchema('Project manager'),
   teamMembers: z.array(projectTeamMemberSchema).optional().default([]),
 });
 
@@ -329,3 +331,45 @@ export const calendarEventSchema = calendarEventBaseSchema.refine(
 );
 
 export const updateCalendarEventSchema = calendarEventBaseSchema.partial();
+
+export const portalFolderSchema = z.object({
+  projectId: requiredUuidSchema('Project'),
+  parentFolderId: uuidSchema.optional().nullable().or(z.literal('')),
+  folderName: z.string().trim().min(1, 'Folder name is required').max(120),
+});
+
+export const portalFileUpdateSchema = z.object({
+  name: z.string().trim().min(1).max(180).optional(),
+  folderId: uuidSchema.optional().nullable().or(z.literal('')),
+  visibility: z.enum(['INTERNAL', 'CLIENT', 'PUBLIC_LINK']).optional(),
+  deliverableStatus: z
+    .enum(['DRAFT', 'READY_FOR_REVIEW', 'AWAITING_APPROVAL', 'APPROVED', 'ARCHIVED'])
+    .optional(),
+});
+
+export const approvalDecisionSchema = z.object({
+  comments: z.string().trim().max(2000).optional().or(z.literal('')),
+});
+
+export const revisionRequestSchema = z.object({
+  projectId: requiredUuidSchema('Project'),
+  deliverableId: requiredUuidSchema('Deliverable'),
+  description: z.string().trim().min(1, 'Revision description is required').max(4000),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
+});
+
+export const revisionUpdateSchema = z.object({
+  description: z.string().trim().min(1).max(4000).optional(),
+  priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).optional(),
+  status: z.enum(['OPEN', 'IN_PROGRESS', 'COMPLETED', 'CLOSED']).optional(),
+});
+
+export const portalMessageSchema = z.object({
+  projectId: requiredUuidSchema('Project'),
+  body: z.string().trim().min(1, 'Message is required').max(5000),
+  internalOnly: z.boolean().optional().default(false),
+});
+
+export const portalMessageUpdateSchema = z.object({
+  body: z.string().trim().min(1, 'Message is required').max(5000),
+});

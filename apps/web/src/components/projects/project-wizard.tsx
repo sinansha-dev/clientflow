@@ -50,8 +50,6 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
     formState: { errors, isSubmitting },
     trigger,
     getValues,
-    setValue,
-    watch,
   } = form;
 
   // Load clients and staff (users list)
@@ -60,19 +58,24 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
       try {
         const [cliRes, usrRes] = await Promise.all([
           api.get('/clients?limit=1000'),
-          api.get('/users'),
+          api.get('/users/staff'),
         ]);
         setClients(cliRes.data.data?.items ?? []);
-        setStaff((usrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+        setStaff(usrRes.data.data?.users ?? []);
       } catch (err) {
         console.error('Failed to load project details selection options:', err);
+        notify({
+          type: 'error',
+          title: 'Could not load team options',
+          message: errorMessage(err, 'Refresh the page and try again.'),
+        });
       }
     }
     loadData();
-  }, []);
+  }, [notify]);
 
   const nextStep = async () => {
-    let fieldsToValidate: any[] = [];
+    let fieldsToValidate: Array<keyof ProjectInput> = [];
     if (step === 1) {
       fieldsToValidate = ['clientId', 'projectName', 'description'];
     } else if (step === 2) {
@@ -81,7 +84,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
       fieldsToValidate = ['projectManagerId'];
     }
 
-    const isValid = await trigger(fieldsToValidate as any);
+    const isValid = await trigger(fieldsToValidate);
     if (isValid) {
       setStep((s) => s + 1);
     }
@@ -286,6 +289,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                   <select
                     className="h-11 rounded-md border border-border bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                     {...register('projectManagerId')}
+                    disabled={staff.length === 0}
                   >
                     <option value="">Select project manager...</option>
                     {staff.map((s) => (
@@ -296,6 +300,11 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                   </select>
                   {errors.projectManagerId && (
                     <span className="text-xs text-danger">{errors.projectManagerId.message}</span>
+                  )}
+                  {staff.length === 0 && (
+                    <span className="text-xs text-warning">
+                      No admin or developer users are available. Add team members first.
+                    </span>
                   )}
                 </div>
 
@@ -323,6 +332,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                           value={tm.userId}
                           onChange={(e) => updateTeamMember(idx, 'userId', e.target.value)}
                           className="h-10 flex-1 rounded-md border border-border bg-background px-2 text-xs"
+                          disabled={staff.length === 0}
                         >
                           <option value="">Choose User...</option>
                           {staff.map((s) => (

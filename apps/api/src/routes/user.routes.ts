@@ -23,6 +23,7 @@ userRoutes.patch('/profile', validate(profileSchema), (req, res, next) =>
 userRoutes.patch('/password', validate(changePasswordSchema), (req, res, next) =>
   userController.changePassword(req, res).catch(next),
 );
+userRoutes.get('/staff', (req, res, next) => userController.staff(req, res).catch(next));
 
 userRoutes.get('/', requireRole('ADMIN'), (req, res, next) =>
   userController.list(req, res).catch(next),

@@ -42,6 +42,18 @@ export const userRepository = {
     });
   },
 
+  listStaff() {
+    return prisma.user.findMany({
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        role: { in: ['ADMIN', 'DEVELOPER'] },
+      },
+      select: publicSelect,
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    });
+  },
+
   create(data: Prisma.UserCreateInput) {
     return prisma.user.create({ data, select: publicSelect });
   },

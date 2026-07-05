@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request } from 'express';
 import { z } from 'zod';
 import multer from 'multer';
 import fs from 'fs';
@@ -13,6 +13,7 @@ import {
   uuidSchema,
 } from '@clientflow/shared';
 import { projectController } from '../controllers/project.controller';
+import { portalController } from '../controllers/portal.controller';
 import { requireAuth } from '../middleware/auth';
 import { requireRole } from '../middleware/rbac';
 import { validate } from '../middleware/validate';
@@ -40,7 +41,7 @@ const storage = multer.diskStorage({
 });
 
 // File Type Filter
-const fileFilter = (_req: any, file: any, cb: any) => {
+const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
   const allowedTypes = [
     'application/pdf',
     'image/jpeg',
@@ -52,18 +53,30 @@ const fileFilter = (_req: any, file: any, cb: any) => {
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/zip',
     'application/x-zip-compressed',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'video/mp4',
+    'video/webm',
+    'text/plain',
+    'application/x-tar',
+    'application/gzip',
+    'application/x-7z-compressed',
   ];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only PDF, Images, Word, Excel, and ZIP are allowed.'));
+    cb(
+      new Error(
+        'Invalid file type. Supported: PDF, images, Office files, ZIP/source archives, and videos.',
+      ),
+    );
   }
 };
 
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max limit
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100MB max limit
 });
 
 // Apply auth middleware to all routes
@@ -223,15 +236,15 @@ projectRoutes.delete(
 // GET list files for a project
 projectRoutes.get(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
   validate(idParams, 'params'),
-  (req, res, next) => projectController.getFiles(req, res).catch(next),
+  (req, res, next) => portalController.files(req, res).catch(next),
 );
 
 // POST handles multipart form file upload
 projectRoutes.post(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
   validate(idParams, 'params'),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
@@ -241,14 +254,14 @@ projectRoutes.post(
       next();
     });
   },
-  (req, res, next) => projectController.uploadFile(req, res).catch(next),
+  (req, res, next) => portalController.uploadFile(req, res).catch(next),
 );
 
 const fileIdParams = z.object({ id: uuidSchema });
 
 projectRoutes.delete(
   '/files/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(fileIdParams, 'params'),
-  (req, res, next) => projectController.deleteFile(req, res).catch(next),
+  (req, res, next) => portalController.deleteFile(req, res).catch(next),
 );
