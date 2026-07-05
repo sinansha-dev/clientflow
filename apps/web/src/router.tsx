@@ -11,6 +11,16 @@ import { ProfilePage } from './pages/profile';
 import { ResetPasswordPage } from './pages/reset-password';
 import { UnauthorizedPage } from './pages/unauthorized';
 import { UsersPage } from './pages/users';
+import { ClientsListPage } from './pages/clients/clients-list';
+import { ClientDetailsPage } from './pages/clients/client-details';
+import { ProjectsListPage } from './pages/projects/projects-list';
+import { ProjectDetailsPage } from './pages/projects/project-details';
+import { TasksLayoutPage } from './pages/tasks/tasks-layout';
+import { TeamListPage } from './pages/team/team-list';
+import { TeamProfilePage } from './pages/team/team-profile';
+import { TimesheetWorkspacePage } from './pages/timesheets/timesheet-workspace';
+import { CalendarWorkspacePage } from './pages/calendar/calendar-workspace';
+import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
 
 export const router = createBrowserRouter([
   {
@@ -30,13 +40,17 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <Navigate to="/dashboard" replace /> },
       { path: '/dashboard', element: <DashboardPage /> },
-      { path: '/clients', element: <PlaceholderPage title="Clients" /> },
-      { path: '/projects', element: <PlaceholderPage title="Projects" /> },
-      { path: '/tasks', element: <PlaceholderPage title="Tasks" /> },
-      { path: '/calendar', element: <PlaceholderPage title="Calendar" /> },
-      { path: '/team', element: <PlaceholderPage title="Team" /> },
+      { path: '/clients', element: <ClientsListPage /> },
+      { path: '/clients/:id', element: <ClientDetailsPage /> },
+      { path: '/projects', element: <ProjectsListPage /> },
+      { path: '/projects/:id', element: <ProjectDetailsPage /> },
+      { path: '/tasks', element: <TasksLayoutPage /> },
+      { path: '/timesheets', element: <TimesheetWorkspacePage /> },
+      { path: '/calendar', element: <CalendarWorkspacePage /> },
+      { path: '/team', element: <TeamListPage /> },
+      { path: '/team/:id', element: <TeamProfilePage /> },
       { path: '/invoices', element: <PlaceholderPage title="Invoices" /> },
-      { path: '/reports', element: <PlaceholderPage title="Reports" /> },
+      { path: '/reports', element: <ReportsWorkspacePage /> },
       { path: '/settings', element: <PlaceholderPage title="Settings" /> },
       { path: '/profile', element: <ProfilePage /> },
       {
