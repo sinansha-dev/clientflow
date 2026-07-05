@@ -23,7 +23,7 @@ export const projectController = {
       limit,
     } = req.query;
 
-    const params: any = {
+    const params: Parameters<typeof projectRepository.list>[0] = {
       search: search as string,
       status: status as string,
       priority: priority as string,
@@ -32,9 +32,14 @@ export const projectController = {
       managerId: managerId as string,
       sortBy: sortBy as string,
       sortOrder: sortOrder as 'asc' | 'desc',
-      page: page ? parseInt(page as string, 10) : undefined,
-      limit: limit ? parseInt(limit as string, 10) : undefined,
     };
+
+    if (page) {
+      params.page = parseInt(page as string, 10);
+    }
+    if (limit) {
+      params.limit = parseInt(limit as string, 10);
+    }
 
     // Developer can only view assigned projects
     if (user.role === 'DEVELOPER') {
@@ -67,7 +72,7 @@ export const projectController = {
 
   async create(req: Request, res: Response) {
     const user = req.user!;
-    const body = req.body;
+    const { teamMembers, ...body } = req.body;
 
     // Check if client exists
     const clientExists = await prisma.client.findFirst({
@@ -77,10 +82,13 @@ export const projectController = {
       return res.status(400).json({ success: false, message: 'Selected client does not exist' });
     }
 
-    // Map creator
+    // Map creator, convert date strings to Date objects, and pass teamMembers as teamMembersInput
     const projectData = {
       ...body,
       createdBy: user.id,
+      startDate: body.startDate ? new Date(body.startDate) : undefined,
+      deadline: body.deadline ? new Date(body.deadline) : undefined,
+      teamMembersInput: teamMembers, // repository handles nested team member creation separately
     };
 
     const project = await projectRepository.create(projectData);
@@ -120,7 +128,14 @@ export const projectController = {
       }
     }
 
-    const updated = await projectRepository.update(id, body);
+    // Convert date strings to Date objects for Prisma
+    const updateData = {
+      ...body,
+      ...(body.startDate !== undefined && { startDate: new Date(body.startDate) }),
+      ...(body.deadline !== undefined && { deadline: new Date(body.deadline) }),
+    };
+
+    const updated = await projectRepository.update(id, updateData);
     await projectActivityService.log(id, 'PROJECT_UPDATED', `Project details were updated`);
 
     return ok(res, 'Project updated successfully', updated);

@@ -6,7 +6,7 @@ import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
 import type { CalendarEvent, Project, AuthUser } from '@clientflow/types';
-import { ChevronLeft, ChevronRight, Plus, Video, CalendarDays, Clock, User } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, CalendarDays } from 'lucide-react';
 
 export function CalendarWorkspacePage() {
   const { user } = useAuthStore();
@@ -15,7 +15,7 @@ export function CalendarWorkspacePage() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [team, setTeam] = useState<AuthUser[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
 
   // Nav date
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -30,20 +30,27 @@ export function CalendarWorkspacePage() {
     endTime: '',
     projectId: '',
     eventType: 'REMINDER', // For custom event
-    meetingType: 'INTERNAL', // For meeting
+    meetingType: 'CLIENT', // For meeting
     platform: 'GOOGLE_MEET',
     meetingLink: '',
-    participantIds: [] as string[],
+    participantIds: user ? [user.id] : ([] as string[]), // auto-include self
   });
 
   const loadFilterOptions = async () => {
     try {
       const [prjRes, usrRes] = await Promise.all([
         api.get('/projects?limit=1000'),
-        api.get('/users'),
+        api.get('/users/staff'), // /users requires ADMIN; /users/staff is open to all roles
       ]);
       setProjects(prjRes.data.data?.items ?? []);
-      setTeam((usrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+      // /users/staff returns { data: { users: [...] } }
+      const staffRaw = usrRes.data.data;
+      const staffArray: AuthUser[] = Array.isArray(staffRaw)
+        ? staffRaw
+        : Array.isArray(staffRaw?.users)
+          ? staffRaw.users
+          : (staffRaw?.items ?? []);
+      setTeam(staffArray.filter((u: AuthUser) => u.role !== 'CLIENT'));
     } catch (err) {
       console.error(err);
     }
@@ -171,10 +178,10 @@ export function CalendarWorkspacePage() {
         endTime: '',
         projectId: '',
         eventType: 'REMINDER',
-        meetingType: 'INTERNAL',
+        meetingType: 'CLIENT',
         platform: 'GOOGLE_MEET',
         meetingLink: '',
-        participantIds: [],
+        participantIds: user ? [user.id] : [], // re-seed self after reset
       });
       loadEvents();
     } catch (err) {

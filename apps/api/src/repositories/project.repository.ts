@@ -41,6 +41,7 @@ export const projectRepository = {
     health?: string;
     clientId?: string;
     managerId?: string;
+    userId?: string;
     sortBy?: string;
     sortOrder?: 'asc' | 'desc';
     page?: number;
@@ -53,6 +54,7 @@ export const projectRepository = {
       health,
       clientId,
       managerId,
+      userId,
       sortBy = 'createdAt',
       sortOrder = 'desc',
       page = 1,
@@ -67,6 +69,7 @@ export const projectRepository = {
       ...(priority && priority !== 'ALL' ? { priority } : {}),
       ...(clientId && clientId !== 'ALL' ? { clientId } : {}),
       ...(managerId && managerId !== 'ALL' ? { projectManagerId: managerId } : {}),
+      ...(userId ? { teamMembers: { some: { userId } } } : {}),
       ...(search
         ? {
             OR: [
