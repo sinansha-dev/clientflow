@@ -7,18 +7,10 @@ import { Input } from '../../components/ui/input';
 import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
-import type {
-  Client,
-  ClientContact,
-  ClientNote,
-  ClientFile,
-  ClientActivity,
-  AuthUser,
-} from '@clientflow/types';
+import type { Client, ClientContact, ClientNote, AuthUser } from '@clientflow/types';
 import {
   ArrowLeft,
   Building,
-  Calendar,
   Clock,
   DollarSign,
   FileText,
@@ -105,18 +97,15 @@ export function ClientDetailsPage() {
   // Load managers for editing client
   useEffect(() => {
     if (user?.role === 'ADMIN') {
-      async function loadManagers() {
+      const loadManagers = async () => {
         try {
-          const response = await api.get('/users');
-          const staff = (response.data.data ?? []).filter(
-            (u: AuthUser) => u.role === 'ADMIN' || u.role === 'DEVELOPER',
-          );
-          setManagers(staff);
+          const response = await api.get('/users/staff');
+          setManagers(response.data.data?.users ?? []);
         } catch (err) {
           console.error(err);
         }
-      }
-      loadManagers();
+      };
+      void loadManagers();
     }
   }, [user]);
 
@@ -129,6 +118,10 @@ export function ClientDetailsPage() {
   }
 
   const isAdmin = user?.role === 'ADMIN';
+  const clientProjects = client.projects ?? [];
+  const activeProjectCount = clientProjects.filter(
+    (project) => !['COMPLETED', 'CANCELLED'].includes(project.status),
+  ).length;
 
   // --- Client Actions ---
   const handleUpdateClient = async (e: React.FormEvent) => {
@@ -506,7 +499,9 @@ export function ClientDetailsPage() {
                     <FolderKanban className="h-5 w-5" />
                   </div>
                   <div>
-                    <span className="block text-2xl font-bold text-foreground">0</span>
+                    <span className="block text-2xl font-bold text-foreground">
+                      {activeProjectCount}
+                    </span>
                     <span className="text-xs text-foreground/50">Active Projects</span>
                   </div>
                 </div>
@@ -515,7 +510,9 @@ export function ClientDetailsPage() {
                     <FolderKanban className="h-5 w-5" />
                   </div>
                   <div>
-                    <span className="block text-2xl font-bold text-foreground">0</span>
+                    <span className="block text-2xl font-bold text-foreground">
+                      {clientProjects.length}
+                    </span>
                     <span className="text-xs text-foreground/50">Total Projects</span>
                   </div>
                 </div>
@@ -765,7 +762,7 @@ export function ClientDetailsPage() {
           </div>
         )}
 
-        {/* --- TAB CONTENT: PROJECTS (Mocked) --- */}
+        {/* --- TAB CONTENT: PROJECTS --- */}
         {activeTab === 'projects' && (
           <Card className="p-0 overflow-hidden">
             <div className="overflow-x-auto">
@@ -779,12 +776,51 @@ export function ClientDetailsPage() {
                     <th className="px-6 py-4">Deadline</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td colSpan={5} className="px-6 py-12 text-center text-foreground/45">
-                      No projects active for this client. Projects will be connectable in Phase 3.
-                    </td>
-                  </tr>
+                <tbody className="divide-y divide-border">
+                  {clientProjects.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-12 text-center text-foreground/45">
+                        No projects active for this client yet.
+                      </td>
+                    </tr>
+                  ) : (
+                    clientProjects.map((project) => (
+                      <tr
+                        key={project.id}
+                        className="cursor-pointer transition hover:bg-muted/30"
+                        onClick={() => navigate(`/projects/${project.id}`)}
+                      >
+                        <td className="px-6 py-4">
+                          <span className="block font-semibold text-foreground">
+                            {project.projectName}
+                          </span>
+                          <span className="text-xs text-foreground/50">{project.projectCode}</span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <span className="rounded-md bg-muted px-2 py-1 text-xs font-semibold">
+                            {project.status}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex min-w-36 items-center gap-2">
+                            <div className="h-2 flex-1 rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-primary"
+                                style={{ width: `${project.progress}%` }}
+                              />
+                            </div>
+                            <span className="text-xs font-semibold">{project.progress}%</span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 font-semibold">
+                          ${Number(project.budget).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 text-foreground/70">
+                          {new Date(project.deadline).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>

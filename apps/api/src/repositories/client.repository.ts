@@ -115,6 +115,21 @@ export const clientRepository = {
         files: {
           orderBy: { createdAt: 'desc' },
         },
+        projects: {
+          where: { deletedAt: null },
+          include: {
+            projectManager: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatar: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
         activities: {
           orderBy: { createdAt: 'desc' },
         },

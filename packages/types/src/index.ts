@@ -48,6 +48,7 @@ export interface Client {
   contacts?: ClientContact[];
   notes?: ClientNote[];
   files?: ClientFile[];
+  projects?: Project[];
   activities?: ClientActivity[];
 }
 
