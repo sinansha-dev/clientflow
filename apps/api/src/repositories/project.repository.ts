@@ -1,15 +1,22 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
+type ProjectHealthInput = {
+  milestones?: Array<{ status: string; dueDate: string | Date }>;
+  deadline: string | Date;
+  progress: number;
+  status: string;
+};
+
 export const projectRepository = {
   // Compute health status dynamically
-  computeHealth(project: any): 'HEALTHY' | 'AT_RISK' | 'DELAYED' {
+  computeHealth(project: ProjectHealthInput): 'HEALTHY' | 'AT_RISK' | 'DELAYED' {
     const now = new Date();
 
     // 1. Check for overdue milestones
     const milestones = project.milestones ?? [];
     const hasOverdueMilestones = milestones.some(
-      (m: any) => m.status !== 'COMPLETED' && new Date(m.dueDate) < now,
+      (milestone) => milestone.status !== 'COMPLETED' && new Date(milestone.dueDate) < now,
     );
     if (hasOverdueMilestones) {
       return 'DELAYED';
@@ -186,6 +193,53 @@ export const projectRepository = {
         },
         meetings: {
           orderBy: { date: 'desc' },
+        },
+        meetingsLinked: {
+          include: {
+            organizer: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatar: true,
+              },
+            },
+            participants: {
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true,
+                    avatar: true,
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { startTime: 'desc' },
+        },
+        timeLogs: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                avatar: true,
+              },
+            },
+            task: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+          orderBy: { startTime: 'desc' },
         },
         deployments: {
           orderBy: { createdAt: 'desc' },

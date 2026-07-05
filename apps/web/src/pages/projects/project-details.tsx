@@ -8,40 +8,22 @@ import { Input } from '../../components/ui/input';
 import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
-import type {
-  Project,
-  ProjectTeam,
-  Milestone,
-  ProjectNote,
-  ProjectFile,
-  ProjectMeeting,
-  ProjectDeployment,
-  ProjectActivity,
-  AuthUser,
-} from '@clientflow/types';
+import type { Project, Milestone, ProjectNote, AuthUser, Meeting } from '@clientflow/types';
 import {
   ArrowLeft,
-  Building,
   Calendar,
   Clock,
   DollarSign,
   FileText,
   Folder,
-  FolderKanban,
-  Globe,
-  Link as LinkIcon,
-  MessageSquare,
   Milestone as MilestoneIcon,
   Plus,
   Rocket,
   Settings,
   Shield,
-  Trash2,
   Upload,
   User,
-  Users,
   Video,
-  Eye,
   RotateCcw,
   FolderOpen,
 } from 'lucide-react';
@@ -96,7 +78,7 @@ export function ProjectDetailsPage() {
   // File Upload State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadFolder, setUploadFolder] = useState('DOCUMENTS');
-  const [uploading, setUploading] = useState(false);
+  const [, setUploading] = useState(false);
 
   // Deployment Inline State
   const [showDeployForm, setShowDeployForm] = useState(false);
@@ -111,6 +93,31 @@ export function ProjectDetailsPage() {
     status: 'SUCCESS',
     version: '1.0.0',
   });
+
+  const linkedMeetings = project?.meetingsLinked ?? [];
+  const legacyMeetings = project?.meetings ?? [];
+  const timeLogs = project?.timeLogs ?? [];
+
+  const statusBadgeClass = (status: string) =>
+    status === 'APPROVED'
+      ? 'bg-emerald-500/10 text-emerald-600'
+      : status === 'SUBMITTED'
+        ? 'bg-primary/10 text-primary'
+        : status === 'REJECTED'
+          ? 'bg-danger/10 text-danger'
+          : 'bg-slate-400/10 text-slate-500';
+
+  const formatUserName = (person?: AuthUser | null) =>
+    person ? `${person.firstName} ${person.lastName}` : 'Unassigned';
+
+  const formatMeetingTime = (meeting: Meeting) => {
+    const start = new Date(meeting.startTime);
+    const end = new Date(meeting.endTime);
+    return `${start.toLocaleDateString()} ${start.toLocaleTimeString([], {
+      hour: '2-digit',
+      minute: '2-digit',
+    })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
 
   const loadProjectDetails = async () => {
     try {
@@ -140,14 +147,14 @@ export function ProjectDetailsPage() {
 
   useEffect(() => {
     if (user?.role === 'ADMIN') {
-      async function loadStaff() {
+      const loadStaff = async () => {
         try {
           const res = await api.get('/users');
           setStaff((res.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
         } catch (err) {
           console.error(err);
         }
-      }
+      };
       loadStaff();
     }
   }, [user]);
@@ -978,26 +985,157 @@ export function ProjectDetailsPage() {
           </div>
         )}
 
-        {/* --- MEETINGS TAB (Simulated) --- */}
+        {/* --- MEETINGS TAB --- */}
         {activeTab === 'meetings' && (
           <div className="grid gap-6">
             <div className="flex justify-between items-center">
               <h3 className="text-base font-bold">Project Meetings</h3>
             </div>
-            <Card className="text-center py-6 text-foreground/45 border border-dashed">
-              No meetings scheduled. Integrate with your calendar tools.
-            </Card>
+            {linkedMeetings.length === 0 && legacyMeetings.length === 0 ? (
+              <Card className="text-center py-6 text-foreground/45 border border-dashed">
+                No meetings scheduled for this project.
+              </Card>
+            ) : (
+              <div className="grid gap-3">
+                {linkedMeetings.map((meeting) => (
+                  <Card key={meeting.id} className="p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="font-bold text-foreground">{meeting.title}</h4>
+                          <span className="rounded bg-primary/10 px-2 py-0.5 text-[10px] font-bold text-primary">
+                            {meeting.meetingType}
+                          </span>
+                        </div>
+                        {meeting.description && (
+                          <p className="mt-1 text-sm text-foreground/60">{meeting.description}</p>
+                        )}
+                        <div className="mt-3 flex flex-wrap gap-3 text-xs text-foreground/55">
+                          <span className="inline-flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {formatMeetingTime(meeting)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <User className="h-3.5 w-3.5" />
+                            {formatUserName(meeting.organizer)}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Video className="h-3.5 w-3.5" />
+                            {meeting.platform}
+                          </span>
+                        </div>
+                      </div>
+                      {meeting.meetingLink && (
+                        <a
+                          href={meeting.meetingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex h-9 shrink-0 items-center justify-center rounded border border-border px-3 text-xs font-bold text-primary hover:bg-primary/10"
+                        >
+                          Join
+                        </a>
+                      )}
+                    </div>
+                    {meeting.participants && meeting.participants.length > 0 && (
+                      <div className="mt-3 border-t border-border pt-3 text-xs text-foreground/55">
+                        Participants:{' '}
+                        {meeting.participants
+                          .map((participant) => formatUserName(participant.user))
+                          .join(', ')}
+                      </div>
+                    )}
+                  </Card>
+                ))}
+
+                {legacyMeetings.map((meeting) => (
+                  <Card key={meeting.id} className="p-4">
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <h4 className="font-bold text-foreground">{meeting.title}</h4>
+                        <div className="mt-2 flex flex-wrap gap-3 text-xs text-foreground/55">
+                          <span className="inline-flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5" />
+                            {new Date(meeting.date).toLocaleString()}
+                          </span>
+                          <span className="inline-flex items-center gap-1">
+                            <Video className="h-3.5 w-3.5" />
+                            {meeting.platform}
+                          </span>
+                        </div>
+                        {meeting.notes && (
+                          <p className="mt-2 text-sm text-foreground/60">{meeting.notes}</p>
+                        )}
+                      </div>
+                      <span className="rounded bg-muted px-2 py-1 text-xs font-semibold text-foreground/60">
+                        {meeting.participants}
+                      </span>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* --- TIMELOGS TAB (Simulated placeholder for Phase 5) --- */}
+        {/* --- TIMELOGS TAB --- */}
         {activeTab === 'timelogs' && (
-          <Card className="text-center py-12">
-            <Clock className="h-12 w-12 text-foreground/30 mx-auto" />
-            <h3 className="text-lg font-bold text-foreground mt-4">Developer Time Logs</h3>
-            <p className="text-sm text-foreground/50 max-w-sm mx-auto mt-2">
-              Time sheet logging and automatic invoice reports will be connectable here in Phase 5.
-            </p>
+          <Card className="p-0 overflow-hidden text-xs">
+            <div className="flex justify-between items-center border-b border-border px-5 py-4">
+              <h3 className="font-bold text-sm">Project Time Logs</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-muted/30 border-b border-border font-bold text-foreground/75">
+                    <th className="px-5 py-3">Description</th>
+                    <th className="px-5 py-3">Team Member</th>
+                    <th className="px-5 py-3">Task</th>
+                    <th className="px-5 py-3">Hours</th>
+                    <th className="px-5 py-3">Status</th>
+                    <th className="px-5 py-3">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {timeLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-5 py-8 text-center text-foreground/45 italic">
+                        No time entries logged for this project.
+                      </td>
+                    </tr>
+                  ) : (
+                    timeLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-muted/10 transition">
+                        <td className="px-5 py-3.5">
+                          <span className="font-semibold block text-foreground/90">
+                            {log.description}
+                          </span>
+                          {log.billable && (
+                            <span className="inline-flex items-center gap-0.5 text-[9px] font-bold text-emerald-600 bg-emerald-500/10 px-1 rounded-sm mt-0.5">
+                              <DollarSign className="h-2.5 w-2.5" /> Billable
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-5 py-3.5 font-semibold">{formatUserName(log.user)}</td>
+                        <td className="px-5 py-3.5 text-foreground/55">
+                          {log.task?.title || 'No task linked'}
+                        </td>
+                        <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                        <td className="px-5 py-3.5">
+                          <span
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusBadgeClass(log.status)}`}
+                          >
+                            {log.status}
+                          </span>
+                        </td>
+                        <td className="px-5 py-3.5 text-foreground/50">
+                          {new Date(log.startTime).toLocaleDateString()}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </Card>
         )}
 

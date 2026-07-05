@@ -120,6 +120,8 @@ export interface Project {
   notes?: ProjectNote[];
   files?: ProjectFile[];
   meetings?: ProjectMeeting[];
+  meetingsLinked?: Meeting[];
+  timeLogs?: TimeLog[];
   deployments?: ProjectDeployment[];
   activities?: ProjectActivity[];
 }
