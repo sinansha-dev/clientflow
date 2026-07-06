@@ -21,6 +21,7 @@ import { TeamProfilePage } from './pages/team/team-profile';
 import { TimesheetWorkspacePage } from './pages/timesheets/timesheet-workspace';
 import { CalendarWorkspacePage } from './pages/calendar/calendar-workspace';
 import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
+import { FinanceWorkspacePage } from './pages/finance/finance-workspace';
 import { ClientPortalPage } from './pages/portal/client-portal';
 
 const staffOnly = ['ADMIN', 'DEVELOPER'] as const;
@@ -127,7 +128,7 @@ export const router = createBrowserRouter([
         path: '/invoices',
         element: (
           <ProtectedRoute roles={[...staffOnly]}>
-            <PlaceholderPage title="Invoices" />
+            <FinanceWorkspacePage />
           </ProtectedRoute>
         ),
       },

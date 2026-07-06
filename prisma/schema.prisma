@@ -51,7 +51,10 @@ model User {
   portalActivities            PortalActivity[]
   revisionRequests            RevisionRequest[]
   fileDownloads               FileDownload[]
-
+  createdQuotations           Quotation[] @relation("QuotationCreator")
+  createdInvoices             Invoice[] @relation("InvoiceCreator")
+  recordedPayments            Payment[] @relation("PaymentRecorder")
+  recordedExpenses            Expense[] @relation("ExpenseRecorder")
   // Workforce Management fields (Phase 5)
   employeeId         String?
   jobTitle           String?
@@ -136,7 +139,9 @@ model Client {
   projects             Project[]
   portalAccesses       ClientPortalAccess[]
   deliverableApprovals DeliverableApproval[]
-
+  quotations           Quotation[]
+  invoices             Invoice[]
+  payments             Payment[]
   @@index([deletedAt])
   @@index([archivedAt])
   @@index([companyName])
@@ -235,7 +240,9 @@ model Project {
   revisionRequests     RevisionRequest[]
   portalMessages       PortalMessage[]
   portalActivities     PortalActivity[]
-
+  quotations           Quotation[]
+  invoices             Invoice[]
+  expenses             Expense[]
   @@index([clientId])
   @@index([projectManagerId])
   @@index([status])
@@ -691,3 +698,137 @@ model FileDownload {
   @@index([userId])
   @@index([createdAt])
 }
+
+model Quotation {
+  id          String          @id @default(uuid()) @db.Uuid
+  quoteNumber String          @unique
+  clientId    String          @db.Uuid
+  client      Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId   String?         @db.Uuid
+  project     Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title       String
+  description String?         @db.Text
+  validUntil  DateTime
+  status      String          @default("DRAFT")
+  subtotal    Float           @default(0)
+  tax         Float           @default(0)
+  discount    Float           @default(0)
+  total       Float           @default(0)
+  notes       String?         @db.Text
+  createdBy   String          @db.Uuid
+  creator     User            @relation("QuotationCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  items       QuotationItem[]
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model QuotationItem {
+  id          String    @id @default(uuid()) @db.Uuid
+  quotationId String    @db.Uuid
+  quotation   Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  name        String
+  description String?   @db.Text
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float     @default(0)
+  total       Float
+  createdAt   DateTime  @default(now())
+
+  @@index([quotationId])
+}
+
+model Invoice {
+  id            String        @id @default(uuid()) @db.Uuid
+  invoiceNumber String        @unique
+  clientId      String        @db.Uuid
+  client        Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId     String?       @db.Uuid
+  project       Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  issueDate     DateTime
+  dueDate       DateTime
+  status        String        @default("DRAFT")
+  currency      String        @default("USD")
+  subtotal      Float         @default(0)
+  tax           Float         @default(0)
+  discount      Float         @default(0)
+  total         Float         @default(0)
+  amountPaid    Float         @default(0)
+  balanceDue    Float         @default(0)
+  notes         String?       @db.Text
+  createdBy     String        @db.Uuid
+  creator       User          @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  deletedAt     DateTime?
+  items         InvoiceItem[]
+  payments      Payment[]
+
+  @@index([clientId])
+  @@index([projectId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model InvoiceItem {
+  id          String   @id @default(uuid()) @db.Uuid
+  invoiceId   String   @db.Uuid
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  name        String
+  description String?  @db.Text
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float    @default(0)
+  total       Float
+  createdAt   DateTime @default(now())
+
+  @@index([invoiceId])
+}
+
+model Payment {
+  id              String   @id @default(uuid()) @db.Uuid
+  invoiceId       String   @db.Uuid
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId        String   @db.Uuid
+  client          Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  amount          Float
+  paymentMethod   String
+  referenceNumber String?
+  paymentDate     DateTime
+  notes           String?  @db.Text
+  recordedBy      String   @db.Uuid
+  recorder        User     @relation("PaymentRecorder", fields: [recordedBy], references: [id])
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([invoiceId])
+  @@index([clientId])
+  @@index([paymentDate])
+}
+
+model Expense {
+  id          String    @id @default(uuid()) @db.Uuid
+  projectId   String    @db.Uuid
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  category    String
+  amount      Float
+  description String    @db.Text
+  receiptUrl  String?
+  expenseDate DateTime
+  recordedBy  String    @db.Uuid
+  recorder    User      @relation("ExpenseRecorder", fields: [recordedBy], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([projectId])
+  @@index([recordedBy])
+  @@index([expenseDate])
+  @@index([deletedAt])
+}
+

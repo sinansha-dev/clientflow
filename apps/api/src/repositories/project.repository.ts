@@ -247,6 +247,16 @@ export const projectRepository = {
         deployments: {
           orderBy: { createdAt: 'desc' },
         },
+        invoices: {
+          where: { deletedAt: null },
+          include: { client: true, payments: true },
+          orderBy: { createdAt: 'desc' },
+        },
+        quotations: {
+          where: { deletedAt: null },
+          include: { client: true, items: true },
+          orderBy: { createdAt: 'desc' },
+        },
         activities: {
           orderBy: { createdAt: 'desc' },
         },

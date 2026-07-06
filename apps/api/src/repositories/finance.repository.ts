@@ -1,0 +1,431 @@
+import type { Prisma, Role } from '@prisma/client';
+import { prisma } from '../config/prisma';
+
+const money = (value: number) => Math.round(value * 100) / 100;
+
+type LineItemInput = {
+  name: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  taxRate?: number;
+};
+
+type FinanceUser = { id: string; role: Role };
+
+function totals(items: LineItemInput[] = [], discount = 0) {
+  const normalized = items.length
+    ? items
+    : [{ name: 'Service', quantity: 1, unitPrice: 0, taxRate: 0 }];
+  const prepared = normalized.map((item) => {
+    const quantity = Number(item.quantity) || 0;
+    const unitPrice = Number(item.unitPrice) || 0;
+    const taxRate = Number(item.taxRate) || 0;
+    const base = quantity * unitPrice;
+    return { ...item, quantity, unitPrice, taxRate, total: money(base + base * (taxRate / 100)) };
+  });
+  const subtotal = money(prepared.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0));
+  const tax = money(
+    prepared.reduce((sum, item) => sum + item.quantity * item.unitPrice * (item.taxRate / 100), 0),
+  );
+  const total = money(Math.max(subtotal + tax - (Number(discount) || 0), 0));
+  return { items: prepared, subtotal, tax, total, discount: money(Number(discount) || 0) };
+}
+
+async function nextNumber(prefix: 'QTN' | 'INV') {
+  const year = new Date().getFullYear();
+  const count = prefix === 'QTN' ? await prisma.quotation.count() : await prisma.invoice.count();
+  return `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+}
+
+async function clientIdsForUser(user: FinanceUser) {
+  if (user.role !== 'CLIENT') return undefined;
+  const accesses = await prisma.clientPortalAccess.findMany({
+    where: { userId: user.id, status: 'ACTIVE' },
+    select: { clientId: true },
+  });
+  return accesses.map((access) => access.clientId);
+}
+
+async function projectIdsForDeveloper(user: FinanceUser) {
+  if (user.role !== 'DEVELOPER') return undefined;
+  const projects = await prisma.projectTeam.findMany({
+    where: { userId: user.id },
+    select: { projectId: true },
+  });
+  return projects.map((project) => project.projectId);
+}
+
+async function visibilityWhere(user: FinanceUser, base: Prisma.QuotationWhereInput = {}) {
+  if (user.role === 'CLIENT') {
+    const clientIds = await clientIdsForUser(user);
+    return { ...base, clientId: { in: clientIds ?? [] } };
+  }
+  if (user.role === 'DEVELOPER') {
+    const projectIds = await projectIdsForDeveloper(user);
+    return { ...base, projectId: { in: projectIds ?? [] } };
+  }
+  return base;
+}
+
+async function invoiceVisibilityWhere(user: FinanceUser, base: Prisma.InvoiceWhereInput = {}) {
+  if (user.role === 'CLIENT') {
+    const clientIds = await clientIdsForUser(user);
+    return { ...base, clientId: { in: clientIds ?? [] } };
+  }
+  if (user.role === 'DEVELOPER') {
+    const projectIds = await projectIdsForDeveloper(user);
+    return { ...base, projectId: { in: projectIds ?? [] } };
+  }
+  return base;
+}
+
+const quoteInclude = {
+  client: true,
+  project: true,
+  items: true,
+  creator: true,
+} satisfies Prisma.QuotationInclude;
+const invoiceInclude = {
+  client: true,
+  project: true,
+  items: true,
+  payments: true,
+  creator: true,
+} satisfies Prisma.InvoiceInclude;
+const paymentInclude = {
+  invoice: { include: { project: true } },
+  client: true,
+  recorder: true,
+} satisfies Prisma.PaymentInclude;
+const expenseInclude = {
+  project: { include: { client: true } },
+  recorder: true,
+} satisfies Prisma.ExpenseInclude;
+
+export const financeRepository = {
+  async listQuotations(
+    user: FinanceUser,
+    filters: { clientId?: string; projectId?: string; status?: string },
+  ) {
+    const base: Prisma.QuotationWhereInput = { deletedAt: null };
+    if (filters.clientId) base.clientId = filters.clientId;
+    if (filters.projectId) base.projectId = filters.projectId;
+    if (filters.status) base.status = filters.status;
+    const where = await visibilityWhere(user, base);
+    return prisma.quotation.findMany({
+      where,
+      include: quoteInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  async createQuotation(userId: string, data: any) {
+    const calculated = totals(data.items, data.discount);
+    return prisma.quotation.create({
+      data: {
+        quoteNumber: await nextNumber('QTN'),
+        clientId: data.clientId,
+        projectId: data.projectId || null,
+        title: data.title,
+        description: data.description || null,
+        validUntil: new Date(data.validUntil),
+        status: data.status || 'DRAFT',
+        subtotal: calculated.subtotal,
+        tax: calculated.tax,
+        discount: calculated.discount,
+        total: calculated.total,
+        notes: data.notes || null,
+        createdBy: userId,
+        items: { create: calculated.items },
+      },
+      include: quoteInclude,
+    });
+  },
+
+  async updateQuotation(id: string, data: any) {
+    const { items, ...rest } = data;
+    const existing = await prisma.quotation.findFirst({
+      where: { id, deletedAt: null },
+      include: { items: true },
+    });
+    if (!existing) return null;
+    const calculated = items ? totals(items, rest.discount ?? existing.discount) : null;
+    return prisma.$transaction(async (tx) => {
+      if (calculated) {
+        await tx.quotationItem.deleteMany({ where: { quotationId: id } });
+      }
+      return tx.quotation.update({
+        where: { id },
+        data: {
+          ...rest,
+          validUntil: rest.validUntil ? new Date(rest.validUntil) : undefined,
+          projectId: rest.projectId === '' ? null : rest.projectId,
+          subtotal: calculated?.subtotal,
+          tax: calculated?.tax,
+          discount: calculated?.discount,
+          total: calculated?.total,
+          items: calculated ? { create: calculated.items } : undefined,
+        },
+        include: quoteInclude,
+      });
+    });
+  },
+
+  async deleteQuotation(id: string) {
+    return prisma.quotation.update({ where: { id }, data: { deletedAt: new Date() } });
+  },
+
+  async setQuotationStatus(id: string, status: string) {
+    return prisma.quotation.update({ where: { id }, data: { status }, include: quoteInclude });
+  },
+
+  async convertQuotationToInvoice(id: string, userId: string) {
+    const quote = await prisma.quotation.findFirst({
+      where: { id, deletedAt: null },
+      include: { items: true, client: true },
+    });
+    if (!quote) return null;
+    const due = new Date();
+    due.setDate(due.getDate() + 30);
+    return prisma.invoice.create({
+      data: {
+        invoiceNumber: await nextNumber('INV'),
+        clientId: quote.clientId,
+        projectId: quote.projectId,
+        issueDate: new Date(),
+        dueDate: due,
+        status: 'DRAFT',
+        currency: quote.client.currency,
+        subtotal: quote.subtotal,
+        tax: quote.tax,
+        discount: quote.discount,
+        total: quote.total,
+        balanceDue: quote.total,
+        notes: quote.notes,
+        createdBy: userId,
+        items: {
+          create: quote.items.map(({ name, description, quantity, unitPrice, taxRate, total }) => ({
+            name,
+            description,
+            quantity,
+            unitPrice,
+            taxRate,
+            total,
+          })),
+        },
+      },
+      include: invoiceInclude,
+    });
+  },
+
+  async listInvoices(
+    user: FinanceUser,
+    filters: { clientId?: string; projectId?: string; status?: string },
+  ) {
+    const base: Prisma.InvoiceWhereInput = { deletedAt: null };
+    if (filters.clientId) base.clientId = filters.clientId;
+    if (filters.projectId) base.projectId = filters.projectId;
+    if (filters.status) base.status = filters.status;
+    const where = await invoiceVisibilityWhere(user, base);
+    return prisma.invoice.findMany({
+      where,
+      include: invoiceInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  async createInvoice(userId: string, data: any) {
+    const client = await prisma.client.findUnique({ where: { id: data.clientId } });
+    const calculated = totals(data.items, data.discount);
+    return prisma.invoice.create({
+      data: {
+        invoiceNumber: await nextNumber('INV'),
+        clientId: data.clientId,
+        projectId: data.projectId || null,
+        issueDate: new Date(data.issueDate),
+        dueDate: new Date(data.dueDate),
+        status: data.status || 'DRAFT',
+        currency: data.currency || client?.currency || 'USD',
+        subtotal: calculated.subtotal,
+        tax: calculated.tax,
+        discount: calculated.discount,
+        total: calculated.total,
+        balanceDue: calculated.total,
+        notes: data.notes || null,
+        createdBy: userId,
+        items: { create: calculated.items },
+      },
+      include: invoiceInclude,
+    });
+  },
+
+  async updateInvoice(id: string, data: any) {
+    const { items, ...rest } = data;
+    const existing = await prisma.invoice.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) return null;
+    const calculated = items ? totals(items, rest.discount ?? existing.discount) : null;
+    return prisma.$transaction(async (tx) => {
+      if (calculated) await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
+      return tx.invoice.update({
+        where: { id },
+        data: {
+          ...rest,
+          issueDate: rest.issueDate ? new Date(rest.issueDate) : undefined,
+          dueDate: rest.dueDate ? new Date(rest.dueDate) : undefined,
+          projectId: rest.projectId === '' ? null : rest.projectId,
+          subtotal: calculated?.subtotal,
+          tax: calculated?.tax,
+          discount: calculated?.discount,
+          total: calculated?.total,
+          balanceDue: calculated ? money(calculated.total - existing.amountPaid) : undefined,
+          items: calculated ? { create: calculated.items } : undefined,
+        },
+        include: invoiceInclude,
+      });
+    });
+  },
+
+  async deleteInvoice(id: string) {
+    return prisma.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
+  },
+
+  async setInvoiceStatus(id: string, status: string) {
+    return prisma.invoice.update({ where: { id }, data: { status }, include: invoiceInclude });
+  },
+
+  async listPayments(user: FinanceUser, filters: { clientId?: string; invoiceId?: string }) {
+    const clientIds = await clientIdsForUser(user);
+    const where: Prisma.PaymentWhereInput = {};
+    if (user.role === 'CLIENT') where.clientId = { in: clientIds ?? [] };
+    else if (filters.clientId) where.clientId = filters.clientId;
+    if (filters.invoiceId) where.invoiceId = filters.invoiceId;
+    return prisma.payment.findMany({
+      where,
+      include: paymentInclude,
+      orderBy: { paymentDate: 'desc' },
+    });
+  },
+
+  async createPayment(userId: string, data: any) {
+    const invoice = await prisma.invoice.findFirst({
+      where: { id: data.invoiceId, deletedAt: null },
+    });
+    if (!invoice) return null;
+    const payment = await prisma.payment.create({
+      data: {
+        invoiceId: invoice.id,
+        clientId: invoice.clientId,
+        amount: Number(data.amount),
+        paymentMethod: data.paymentMethod,
+        referenceNumber: data.referenceNumber || null,
+        paymentDate: new Date(data.paymentDate),
+        notes: data.notes || null,
+        recordedBy: userId,
+      },
+      include: paymentInclude,
+    });
+    await this.recalculateInvoice(invoice.id);
+    return payment;
+  },
+
+  async updatePayment(id: string, data: any) {
+    const updateData: Prisma.PaymentUpdateInput = {};
+    if (data.amount !== undefined) updateData.amount = Number(data.amount);
+    if (data.paymentMethod !== undefined) updateData.paymentMethod = data.paymentMethod;
+    if (data.referenceNumber !== undefined) updateData.referenceNumber = data.referenceNumber;
+    if (data.paymentDate) updateData.paymentDate = new Date(data.paymentDate);
+    if (data.notes !== undefined) updateData.notes = data.notes;
+    const payment = await prisma.payment.update({
+      where: { id },
+      data: updateData,
+      include: paymentInclude,
+    });
+    await this.recalculateInvoice(payment.invoiceId);
+    return payment;
+  },
+
+  async recalculateInvoice(invoiceId: string) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: invoiceId },
+      include: { payments: true },
+    });
+    if (!invoice) return null;
+    const amountPaid = money(invoice.payments.reduce((sum, payment) => sum + payment.amount, 0));
+    const balanceDue = money(Math.max(invoice.total - amountPaid, 0));
+    const status =
+      balanceDue <= 0
+        ? 'PAID'
+        : amountPaid > 0
+          ? 'PARTIALLY_PAID'
+          : invoice.status === 'DRAFT'
+            ? 'DRAFT'
+            : new Date(invoice.dueDate) < new Date()
+              ? 'OVERDUE'
+              : 'SENT';
+    return prisma.invoice.update({
+      where: { id: invoiceId },
+      data: { amountPaid, balanceDue, status },
+    });
+  },
+
+  async listExpenses(user: FinanceUser, filters: { projectId?: string }) {
+    const projectIds = await projectIdsForDeveloper(user);
+    const where: Prisma.ExpenseWhereInput = { deletedAt: null };
+    if (user.role === 'DEVELOPER') where.projectId = { in: projectIds ?? [] };
+    else if (filters.projectId) where.projectId = filters.projectId;
+    return prisma.expense.findMany({
+      where,
+      include: expenseInclude,
+      orderBy: { expenseDate: 'desc' },
+    });
+  },
+
+  async createExpense(userId: string, data: any) {
+    return prisma.expense.create({
+      data: {
+        projectId: data.projectId,
+        category: data.category,
+        amount: Number(data.amount),
+        description: data.description,
+        receiptUrl: data.receiptUrl || null,
+        expenseDate: new Date(data.expenseDate),
+        recordedBy: userId,
+      },
+      include: expenseInclude,
+    });
+  },
+
+  async updateExpense(id: string, data: any) {
+    return prisma.expense.update({
+      where: { id },
+      data: { ...data, expenseDate: data.expenseDate ? new Date(data.expenseDate) : undefined },
+      include: expenseInclude,
+    });
+  },
+
+  async deleteExpense(id: string) {
+    return prisma.expense.update({ where: { id }, data: { deletedAt: new Date() } });
+  },
+
+  async financeReport() {
+    const [invoices, payments, expenses, quotations] = await Promise.all([
+      prisma.invoice.findMany({ where: { deletedAt: null } }),
+      prisma.payment.findMany(),
+      prisma.expense.findMany({ where: { deletedAt: null } }),
+      prisma.quotation.findMany({ where: { deletedAt: null } }),
+    ]);
+    const revenue = money(payments.reduce((sum, payment) => sum + payment.amount, 0));
+    const outstanding = money(invoices.reduce((sum, invoice) => sum + invoice.balanceDue, 0));
+    const expenseTotal = money(expenses.reduce((sum, expense) => sum + expense.amount, 0));
+    return {
+      revenue,
+      outstanding,
+      expenses: expenseTotal,
+      profit: money(revenue - expenseTotal),
+      draftQuotes: quotations.filter((quote) => quote.status === 'DRAFT').length,
+      openInvoices: invoices.filter((invoice) => !['PAID', 'CANCELLED'].includes(invoice.status))
+        .length,
+    };
+  },
+};

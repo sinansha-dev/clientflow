@@ -140,6 +140,9 @@ export const projectController = {
       'timeLogs',
       'deployments',
       'activities',
+      'quotations',
+      'invoices',
+      'expenses',
     ];
     const updateData = { ...body };
     for (const field of relationFields) {

@@ -1150,14 +1150,49 @@ export function ProjectDetailsPage() {
           </Card>
         )}
 
-        {/* --- INVOICES TAB (Simulated placeholder for Phase 7) --- */}
+        {/* --- INVOICES TAB --- */}
         {activeTab === 'invoices' && (
-          <Card className="text-center py-12">
-            <DollarSign className="h-12 w-12 text-foreground/30 mx-auto" />
-            <h3 className="text-lg font-bold text-foreground mt-4">Associated Invoices</h3>
-            <p className="text-sm text-foreground/50 max-w-sm mx-auto mt-2">
-              Project billing and client invoice registers will be built in Phase 7.
-            </p>
+          <Card className="p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                    <th className="px-6 py-4">Invoice Number</th>
+                    <th className="px-6 py-4">Client</th>
+                    <th className="px-6 py-4">Amount</th>
+                    <th className="px-6 py-4">Balance</th>
+                    <th className="px-6 py-4">Due Date</th>
+                    <th className="px-6 py-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {project.invoices?.length ? (
+                    project.invoices.map((invoice) => (
+                      <tr key={invoice.id} className="border-b border-border">
+                        <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                        <td className="px-6 py-4">{invoice.client?.companyName}</td>
+                        <td className="px-6 py-4">
+                          {invoice.currency} {invoice.total.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {invoice.currency} {invoice.balanceDue.toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4">
+                          {new Date(invoice.dueDate).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 font-bold text-primary">{invoice.status}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="px-6 py-12 text-center text-foreground/45">
+                        No invoices found for this project.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </Card>
         )}
 

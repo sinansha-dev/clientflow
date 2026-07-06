@@ -35,7 +35,7 @@ export const navItems: NavItem[] = [
   { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'DEVELOPER'] },
   { label: 'Calendar', href: '/calendar', icon: CalendarDays, roles: ['ADMIN', 'DEVELOPER'] },
   { label: 'Team', href: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Invoices', href: '/invoices', icon: CreditCard, roles: ['ADMIN', 'DEVELOPER'] },
+  { label: 'Finance', href: '/invoices', icon: CreditCard, roles: ['ADMIN', 'DEVELOPER'] },
   { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'DEVELOPER'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN'] },
 ];

@@ -133,6 +133,16 @@ export const clientRepository = {
         activities: {
           orderBy: { createdAt: 'desc' },
         },
+        invoices: {
+          where: { deletedAt: null },
+          include: { project: true, payments: true },
+          orderBy: { createdAt: 'desc' },
+        },
+        quotations: {
+          where: { deletedAt: null },
+          include: { project: true, items: true },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
   },

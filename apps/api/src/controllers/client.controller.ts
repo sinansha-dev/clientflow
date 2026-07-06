@@ -196,6 +196,9 @@ export const clientController = {
       'projects',
       'portalAccesses',
       'deliverableApprovals',
+      'quotations',
+      'invoices',
+      'payments',
     ];
     const updateData = { ...body };
     for (const field of relationFields) {

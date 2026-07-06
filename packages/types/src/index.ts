@@ -50,6 +50,8 @@ export interface Client {
   files?: ClientFile[];
   projects?: Project[];
   activities?: ClientActivity[];
+  invoices?: Invoice[];
+  quotations?: Quotation[];
 }
 
 export interface ClientContact {
@@ -124,6 +126,9 @@ export interface Project {
   timeLogs?: TimeLog[];
   deployments?: ProjectDeployment[];
   activities?: ProjectActivity[];
+  invoices?: Invoice[];
+  quotations?: Quotation[];
+  expenses?: Expense[];
 }
 
 export interface ProjectTeam {
@@ -331,4 +336,121 @@ export interface CalendarEvent {
   user?: AuthUser;
   projectId?: string | null;
   project?: Project | null;
+}
+
+export interface QuotationItem {
+  id: string;
+  quotationId: string;
+  name: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  total: number;
+  createdAt: string | Date;
+}
+
+export interface Quotation {
+  id: string;
+  quoteNumber: string;
+  clientId: string;
+  client?: Client;
+  projectId?: string | null;
+  project?: Project | null;
+  title: string;
+  description?: string | null;
+  validUntil: string | Date;
+  status: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  notes?: string | null;
+  createdBy: string;
+  creator?: AuthUser;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  deletedAt?: string | Date | null;
+  items?: QuotationItem[];
+}
+
+export interface InvoiceItem {
+  id: string;
+  invoiceId: string;
+  name: string;
+  description?: string | null;
+  quantity: number;
+  unitPrice: number;
+  taxRate: number;
+  total: number;
+  createdAt: string | Date;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  clientId: string;
+  client?: Client;
+  projectId?: string | null;
+  project?: Project | null;
+  issueDate: string | Date;
+  dueDate: string | Date;
+  status: string;
+  currency: string;
+  subtotal: number;
+  tax: number;
+  discount: number;
+  total: number;
+  amountPaid: number;
+  balanceDue: number;
+  notes?: string | null;
+  createdBy: string;
+  creator?: AuthUser;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  deletedAt?: string | Date | null;
+  items?: InvoiceItem[];
+  payments?: Payment[];
+}
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  invoice?: Invoice;
+  clientId: string;
+  client?: Client;
+  amount: number;
+  paymentMethod: string;
+  referenceNumber?: string | null;
+  paymentDate: string | Date;
+  notes?: string | null;
+  recordedBy: string;
+  recorder?: AuthUser;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface Expense {
+  id: string;
+  projectId: string;
+  project?: Project;
+  category: string;
+  amount: number;
+  description: string;
+  receiptUrl?: string | null;
+  expenseDate: string | Date;
+  recordedBy: string;
+  recorder?: AuthUser;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  deletedAt?: string | Date | null;
+}
+
+export interface FinanceSummary {
+  revenue: number;
+  outstanding: number;
+  expenses: number;
+  profit: number;
+  draftQuotes: number;
+  openInvoices: number;
 }

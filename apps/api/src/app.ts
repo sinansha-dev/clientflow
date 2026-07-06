@@ -22,6 +22,13 @@ import {
 } from './routes/portal.routes';
 import { env } from './config/env';
 import { cookieSecret } from './utils/cookies';
+import {
+  quotationRoutes,
+  invoiceRoutes,
+  paymentRoutes,
+  expenseRoutes,
+  financeReportRoutes,
+} from './routes/finance.routes';
 import { errorMiddleware } from './middleware/error';
 import { requestLogger } from './middleware/request-logger';
 
@@ -70,6 +77,11 @@ app.use('/folders', folderRoutes);
 app.use('/approvals', approvalRoutes);
 app.use('/revisions', revisionRoutes);
 app.use('/messages', messageRoutes);
+app.use('/quotations', quotationRoutes);
+app.use('/invoices', invoiceRoutes);
+app.use('/payments', paymentRoutes);
+app.use('/expenses', expenseRoutes);
+app.use('/reports', financeReportRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found', errors: [] });
