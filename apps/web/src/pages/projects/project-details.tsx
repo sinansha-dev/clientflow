@@ -179,7 +179,18 @@ export function ProjectDetailsPage() {
   const handleUpdateProject = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.patch(`/projects/${id}`, editForm);
+      const payload = {
+        projectName: editForm.projectName,
+        description: editForm.description,
+        status: editForm.status,
+        priority: editForm.priority,
+        budget: editForm.budget,
+        estimatedHours: editForm.estimatedHours,
+        actualHours: editForm.actualHours,
+        deadline: editForm.deadline,
+        projectManagerId: editForm.projectManagerId,
+      };
+      const response = await api.patch(`/projects/${id}`, payload);
       setProject(response.data.data);
       setIsEditingInfo(false);
       notify({ type: 'success', title: 'Project Updated' });

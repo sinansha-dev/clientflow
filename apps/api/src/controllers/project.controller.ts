@@ -128,12 +128,31 @@ export const projectController = {
       }
     }
 
-    // Convert date strings to Date objects for Prisma
-    const updateData = {
-      ...body,
-      ...(body.startDate !== undefined && { startDate: new Date(body.startDate) }),
-      ...(body.deadline !== undefined && { deadline: new Date(body.deadline) }),
-    };
+    const relationFields = [
+      'client',
+      'projectManager',
+      'teamMembers',
+      'milestones',
+      'notes',
+      'files',
+      'meetings',
+      'meetingsLinked',
+      'timeLogs',
+      'deployments',
+      'activities',
+    ];
+    const updateData = { ...body };
+    for (const field of relationFields) {
+      delete updateData[field];
+    }
+
+    // Convert date strings to Date objects for Prisma and ignore loaded relation arrays.
+    if (body.startDate !== undefined) {
+      updateData.startDate = new Date(body.startDate);
+    }
+    if (body.deadline !== undefined) {
+      updateData.deadline = new Date(body.deadline);
+    }
 
     const updated = await projectRepository.update(id, updateData);
     await projectActivityService.log(id, 'PROJECT_UPDATED', `Project details were updated`);
