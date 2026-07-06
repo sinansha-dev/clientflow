@@ -1,7 +1,16 @@
 import dotenv from 'dotenv';
+import path from 'path';
 import { z } from 'zod';
 
-dotenv.config();
+const envFiles = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), 'apps/api/.env'),
+  path.resolve(__dirname, '../../.env'),
+];
+
+for (const envFile of envFiles) {
+  dotenv.config({ path: envFile });
+}
 
 const envSchema = z.object({
   DATABASE_URL: z.string().url(),
