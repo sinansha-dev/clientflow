@@ -137,7 +137,22 @@ export function ClientDetailsPage() {
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const response = await api.patch(`/clients/${id}`, editClientForm);
+      const payload = {
+        companyName: editClientForm.companyName,
+        companyLogo: editClientForm.companyLogo,
+        industry: editClientForm.industry,
+        website: editClientForm.website,
+        email: editClientForm.email,
+        phone: editClientForm.phone,
+        assignedManagerId: editClientForm.assignedManagerId || null,
+        billingAddress: editClientForm.billingAddress,
+        shippingAddress: editClientForm.shippingAddress,
+        taxNumber: editClientForm.taxNumber,
+        currency: editClientForm.currency,
+        timezone: editClientForm.timezone,
+        source: editClientForm.source,
+      };
+      const response = await api.patch(`/clients/${id}`, payload);
       setClient(response.data.data);
       setIsEditingClient(false);
       notify({

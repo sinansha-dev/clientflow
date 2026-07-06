@@ -187,7 +187,22 @@ export const clientController = {
       }
     }
 
-    const updated = await clientRepository.update(id, body);
+    const relationFields = [
+      'assignedManager',
+      'contacts',
+      'notes',
+      'files',
+      'activities',
+      'projects',
+      'portalAccesses',
+      'deliverableApprovals',
+    ];
+    const updateData = { ...body };
+    for (const field of relationFields) {
+      delete updateData[field];
+    }
+
+    const updated = await clientRepository.update(id, updateData);
     await activityService.log(id, 'CLIENT_UPDATED', `Client company details were updated`);
 
     return ok(res, 'Client updated successfully', updated);
