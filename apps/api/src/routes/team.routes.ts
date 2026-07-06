@@ -46,3 +46,11 @@ teamRoutes.patch(
   validate(z.object({ status: z.enum(['ACTIVE', 'INACTIVE']) })),
   (req, res, next) => teamController.updateStatus(req, res).catch(next),
 );
+
+teamRoutes.post(
+  '/:id/reset-password',
+  requireRole('ADMIN'),
+  validate(idParams, 'params'),
+  validate(z.object({ password: z.string().min(6, 'Password must be at least 6 characters') })),
+  (req, res, next) => teamController.resetPassword(req, res).catch(next),
+);

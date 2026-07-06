@@ -84,7 +84,7 @@ export const createClientSchema = z.object({
   timezone: z.string().trim().default('UTC'),
   status: z.string().trim().default('ACTIVE'),
   source: z.string().trim().optional().or(z.literal('')),
-  assignedManagerId: z.string().uuid().optional().or(z.literal('')),
+  assignedManagerId: z.string().uuid().optional().nullable().or(z.literal('')),
   // Primary contact fields (for Step 3 of the creation wizard)
   primaryContact: clientContactSchema.omit({ primaryContact: true }).optional(),
 });
@@ -232,12 +232,12 @@ export const updateTaskSchema = createTaskBaseSchema.partial();
 
 export const teamMemberProfileSchema = z.object({
   employeeId: z.string().trim().optional().nullable(),
-  jobTitle: z.string().trim().min(1, 'Job title is required').max(100),
-  department: z.string().trim().min(1, 'Department is required').max(100),
+  jobTitle: z.string().trim().max(100).optional().nullable().or(z.literal('')),
+  department: z.string().trim().max(100).optional().nullable().or(z.literal('')),
   skills: z.array(z.string().trim()).default([]),
   hourlyRate: z.coerce
     .number()
-    .positive('Hourly rate must be a positive number')
+    .nonnegative('Hourly rate must be zero or greater')
     .optional()
     .nullable(),
   employmentType: z

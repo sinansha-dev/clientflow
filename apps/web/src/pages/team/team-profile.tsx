@@ -71,6 +71,8 @@ export function TeamProfilePage() {
   const [editingSkills, setEditingSkills] = useState(false);
   const [skillsInput, setSkillsInput] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [resetPassword, setResetPassword] = useState('');
   const [profileForm, setProfileForm] = useState({
     jobTitle: '',
     department: '',
@@ -149,6 +151,18 @@ export function TeamProfilePage() {
     }
   };
 
+  const handlePasswordReset = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await api.post(`/team/${member.id}/reset-password`, { password: resetPassword });
+      notify({ type: 'success', title: 'Password reset successfully' });
+      setResetPassword('');
+      setShowPasswordReset(false);
+    } catch (err) {
+      notify({ type: 'error', title: 'Password reset failed', message: errorMessage(err) });
+    }
+  };
+
   // Determine workload indicators
   const tasksDueToday = member.assignedTasks?.filter((t) => {
     if (!t.dueDate || t.status === 'COMPLETED') return false;
@@ -179,11 +193,23 @@ export function TeamProfilePage() {
                 {member.jobTitle || 'Team Member'} &bull; {member.department || 'Staff'}
               </span>
             </div>
-            {canEdit && (
-              <Button onClick={() => setEditingProfile(!editingProfile)} className="h-9 text-xs">
-                {editingProfile ? 'Cancel Edit' : 'Edit Profile Parameters'}
-              </Button>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {canEdit && (
+                <Button onClick={() => setEditingProfile(!editingProfile)} className="h-9 text-xs">
+                  {editingProfile ? 'Cancel Edit' : 'Edit Profile Parameters'}
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setShowPasswordReset(!showPasswordReset)}
+                  className="h-9 text-xs"
+                >
+                  Reset Password
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-center md:justify-start gap-4 flex-wrap text-xs text-foreground/55 pt-1">
@@ -209,6 +235,36 @@ export function TeamProfilePage() {
         </div>
       </Card>
 
+      {showPasswordReset && isAdmin && (
+        <Card className="border border-secondary/20 bg-secondary/5">
+          <h3 className="text-sm font-bold mb-4">Reset Member Password</h3>
+          <form
+            onSubmit={handlePasswordReset}
+            className="grid gap-4 sm:grid-cols-[1fr_auto] text-xs"
+          >
+            <div className="grid gap-1">
+              <label className="font-semibold">New Password</label>
+              <input
+                type="password"
+                value={resetPassword}
+                onChange={(e) => setResetPassword(e.target.value)}
+                className="h-10 rounded border border-border bg-background px-3 outline-none"
+                placeholder="Minimum 6 characters"
+                required
+                minLength={6}
+              />
+            </div>
+            <div className="flex items-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => setShowPasswordReset(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={resetPassword.length < 6}>
+                Reset
+              </Button>
+            </div>
+          </form>
+        </Card>
+      )}
       {/* EDIT PROFILE DRAWER FORM */}
       {editingProfile && (
         <Card className="border border-primary/20 bg-primary/5">

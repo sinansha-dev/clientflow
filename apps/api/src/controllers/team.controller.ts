@@ -109,6 +109,24 @@ export const teamController = {
     return ok(res, 'Team member profile status updated successfully');
   },
 
+  async resetPassword(req: Request, res: Response) {
+    const id = req.params.id!;
+    const { password } = req.body;
+
+    const member = await teamRepository.findById(id);
+    if (!member) {
+      throw notFound('Team member profile not found');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+    await prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword, status: 'ACTIVE' },
+    });
+
+    return ok(res, 'Team member password reset successfully');
+  },
+
   async invite(req: Request, res: Response) {
     const { email, role, firstName, lastName, jobTitle, department } = req.body;
 
