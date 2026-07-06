@@ -120,12 +120,21 @@ export function TeamProfilePage() {
 
   const isSelf = currentUser?.id === member.id;
   const isAdmin = currentUser?.role === 'ADMIN';
+  const memberTimeLogs = member.timeLogs ?? [];
   const canEdit = isAdmin || isSelf;
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await api.patch(`/team/${member.id}`, profileForm);
+      const payload = {
+        jobTitle: profileForm.jobTitle,
+        department: profileForm.department,
+        hourlyRate: isAdmin ? Number(profileForm.hourlyRate || 0) : undefined,
+        employmentType: isAdmin ? profileForm.employmentType : undefined,
+        availabilityStatus: profileForm.availabilityStatus,
+        timezone: profileForm.timezone,
+      };
+      await api.patch(`/team/${member.id}`, payload);
       notify({ type: 'success', title: 'Profile Updated' });
       setEditingProfile(false);
       loadProfile();
@@ -574,19 +583,20 @@ export function TeamProfilePage() {
                   <th className="px-5 py-3">Description</th>
                   <th className="px-5 py-3">Project</th>
                   <th className="px-5 py-3">Hours</th>
+                  <th className="px-5 py-3">Value</th>
                   <th className="px-5 py-3">Status</th>
                   <th className="px-5 py-3">Logged Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {member.timeLogs?.length === 0 ? (
+                {memberTimeLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-5 py-8 text-center text-foreground/45 italic">
+                    <td colSpan={6} className="px-5 py-8 text-center text-foreground/45 italic">
                       No time entries logged.
                     </td>
                   </tr>
                 ) : (
-                  member.timeLogs?.map((log) => (
+                  memberTimeLogs.map((log) => (
                     <tr key={log.id}>
                       <td className="px-5 py-3.5 font-semibold text-foreground/85">
                         {log.description}
@@ -598,6 +608,11 @@ export function TeamProfilePage() {
                         </span>
                       </td>
                       <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                      <td className="px-5 py-3.5 font-bold text-emerald-600">
+                        {log.billable
+                          ? `${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
+                          : '-'}
+                      </td>
                       <td className="px-5 py-3.5">
                         <span
                           className={`px-2 py-0.5 rounded text-[10px] font-bold ${

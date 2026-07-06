@@ -92,7 +92,25 @@ export const teamController = {
       throw forbidden('You cannot edit another team member profile');
     }
 
-    const updated = await teamRepository.update(id, body);
+    const updateData: Parameters<typeof teamRepository.update>[1] = {};
+    if (body.employeeId !== undefined) updateData.employeeId = body.employeeId || null;
+    if (body.jobTitle !== undefined) updateData.jobTitle = body.jobTitle || null;
+    if (body.department !== undefined) updateData.department = body.department || null;
+    if (Array.isArray(body.skills)) updateData.skills = body.skills;
+    if (body.availabilityStatus !== undefined)
+      updateData.availabilityStatus = body.availabilityStatus;
+    if (body.timezone !== undefined) updateData.timezone = body.timezone;
+
+    if (user.role === 'ADMIN') {
+      if (body.hourlyRate !== undefined) {
+        updateData.hourlyRate =
+          body.hourlyRate === null || body.hourlyRate === '' ? null : Number(body.hourlyRate);
+      }
+      if (body.employmentType !== undefined) updateData.employmentType = body.employmentType;
+      if (body.joinDate !== undefined)
+        updateData.joinDate = body.joinDate ? new Date(body.joinDate) : null;
+    }
+    const updated = await teamRepository.update(id, updateData);
     return ok(res, 'Profile updated successfully', updated);
   },
 

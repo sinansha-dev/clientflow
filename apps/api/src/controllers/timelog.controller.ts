@@ -8,9 +8,7 @@ export const timelogController = {
     const user = req.user!;
     const { userId, projectId, taskId, status, startDate, endDate } = req.query;
 
-    const isManagerApprovalQueue = user.role === 'DEVELOPER' && status === 'SUBMITTED';
-    const filterUserId =
-      user.role === 'ADMIN' ? (userId as string) : isManagerApprovalQueue ? undefined : user.id;
+    const filterUserId = user.role === 'ADMIN' ? (userId as string) : user.id;
 
     const params: Parameters<typeof timelogRepository.list>[0] = {
       projectId: projectId as string,
@@ -20,7 +18,6 @@ export const timelogController = {
       endDate: endDate as string,
     };
     if (filterUserId) params.userId = filterUserId;
-    if (isManagerApprovalQueue) params.managerId = user.id;
 
     const logs = await timelogRepository.list(params);
 
@@ -113,27 +110,13 @@ export const timelogController = {
   },
 
   async approve(req: Request, res: Response) {
-    const user = req.user!;
     const id = req.params.id!;
-    const entry = await timelogRepository.findById(id);
-    if (!entry) throw notFound('Time log not found');
-    const canApprove = user.role === 'ADMIN' || entry.project?.projectManagerId === user.id;
-    if (!canApprove) {
-      throw forbidden('Only admins or the project manager can approve this time log');
-    }
     const updated = await timelogRepository.approve(id);
     return ok(res, 'Time log approved successfully', updated);
   },
 
   async reject(req: Request, res: Response) {
-    const user = req.user!;
     const id = req.params.id!;
-    const entry = await timelogRepository.findById(id);
-    if (!entry) throw notFound('Time log not found');
-    const canReject = user.role === 'ADMIN' || entry.project?.projectManagerId === user.id;
-    if (!canReject) {
-      throw forbidden('Only admins or the project manager can reject this time log');
-    }
     const updated = await timelogRepository.reject(id);
     return ok(res, 'Time log change requested successfully', updated);
   },

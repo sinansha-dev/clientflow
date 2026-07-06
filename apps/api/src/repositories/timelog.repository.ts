@@ -48,16 +48,14 @@ export const timelogRepository = {
     status?: string;
     startDate?: string;
     endDate?: string;
-    managerId?: string;
   }) {
-    const { userId, projectId, taskId, status, startDate, endDate, managerId } = params;
+    const { userId, projectId, taskId, status, startDate, endDate } = params;
 
     const where: Prisma.TimeLogWhereInput = {
       ...(userId && userId !== 'ALL' ? { userId } : {}),
       ...(projectId && projectId !== 'ALL' ? { projectId } : {}),
       ...(taskId && taskId !== 'ALL' ? { taskId } : {}),
       ...(status && status !== 'ALL' ? { status } : {}),
-      ...(managerId ? { project: { projectManagerId: managerId } } : {}),
       ...(startDate || endDate
         ? {
             startTime: {

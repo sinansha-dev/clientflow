@@ -74,8 +74,8 @@ export function TimesheetWorkspacePage() {
       const res = await api.get('/timelogs');
       setLogs(res.data.data ?? []);
 
-      // Admins see all submitted logs; project managers see submitted logs for managed projects.
-      if (user?.role === 'ADMIN' || user?.role === 'DEVELOPER') {
+      // Only admins approve submitted time logs.
+      if (user?.role === 'ADMIN') {
         const pRes = await api.get('/timelogs?status=SUBMITTED');
         setPendingLogs(pRes.data.data ?? []);
       }

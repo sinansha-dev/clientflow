@@ -221,9 +221,13 @@ export const teamRepository = {
   },
 
   async update(id: string, data: Partial<Prisma.UserUpdateInput>) {
+    const cleaned = Object.fromEntries(
+      Object.entries(data).filter(([, value]) => value !== undefined),
+    ) as Prisma.UserUpdateInput;
+
     return prisma.user.update({
       where: { id },
-      data,
+      data: cleaned,
       select: {
         id: true,
         employeeId: true,
