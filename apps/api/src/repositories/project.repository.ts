@@ -171,6 +171,7 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
+                hourlyRate: true,
               },
             },
           },
@@ -186,6 +187,7 @@ export const projectRepository = {
                 firstName: true,
                 lastName: true,
                 avatar: true,
+                hourlyRate: true,
               },
             },
           },
@@ -206,6 +208,7 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
+                hourlyRate: true,
               },
             },
             participants: {
@@ -233,6 +236,7 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
+                hourlyRate: true,
               },
             },
             task: {

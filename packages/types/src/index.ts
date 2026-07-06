@@ -11,6 +11,7 @@ export interface AuthUser {
   role: Role;
   status: UserStatus;
   emailVerified: boolean;
+  hourlyRate?: number | null;
 }
 
 export interface ApiResponse<T> {

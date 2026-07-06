@@ -51,14 +51,14 @@ timelogRoutes.post(
 
 timelogRoutes.post(
   '/:id/approve',
-  requireRole('ADMIN'),
+  requireRole('ADMIN', 'DEVELOPER'),
   validate(idParams, 'params'),
   (req, res, next) => timelogController.approve(req, res).catch(next),
 );
 
 timelogRoutes.post(
   '/:id/reject',
-  requireRole('ADMIN'),
+  requireRole('ADMIN', 'DEVELOPER'),
   validate(idParams, 'params'),
   (req, res, next) => timelogController.reject(req, res).catch(next),
 );

@@ -1,6 +1,45 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
+const roundHours = (value: number) => Math.round(value * 100) / 100;
+
+async function syncProjectActualHours(projectId: string) {
+  const logs = await prisma.timeLog.findMany({
+    where: { projectId, status: 'APPROVED', endTime: { not: null } },
+    select: { duration: true },
+  });
+  const actualHours = roundHours(logs.reduce((sum, log) => sum + log.duration, 0));
+  await prisma.project.update({ where: { id: projectId }, data: { actualHours } });
+}
+
+async function syncTaskActualHours(taskId?: string | null) {
+  if (!taskId) return;
+  const logs = await prisma.timeLog.findMany({
+    where: { taskId, status: 'APPROVED', endTime: { not: null } },
+    select: { duration: true },
+  });
+  const actualHours = roundHours(logs.reduce((sum, log) => sum + log.duration, 0));
+  await prisma.task.update({ where: { id: taskId }, data: { actualHours } });
+}
+
+async function syncTimeTargets(projectId: string, taskId?: string | null) {
+  await Promise.all([syncProjectActualHours(projectId), syncTaskActualHours(taskId)]);
+}
+
+const listInclude = {
+  project: {
+    select: {
+      id: true,
+      projectName: true,
+      projectCode: true,
+      clientId: true,
+      client: { select: { id: true, companyName: true } },
+    },
+  },
+  task: { select: { id: true, title: true } },
+  user: { select: { id: true, firstName: true, lastName: true, avatar: true, hourlyRate: true } },
+} satisfies Prisma.TimeLogInclude;
+
 export const timelogRepository = {
   async list(params: {
     userId?: string;
@@ -9,14 +48,16 @@ export const timelogRepository = {
     status?: string;
     startDate?: string;
     endDate?: string;
+    managerId?: string;
   }) {
-    const { userId, projectId, taskId, status, startDate, endDate } = params;
+    const { userId, projectId, taskId, status, startDate, endDate, managerId } = params;
 
     const where: Prisma.TimeLogWhereInput = {
       ...(userId && userId !== 'ALL' ? { userId } : {}),
       ...(projectId && projectId !== 'ALL' ? { projectId } : {}),
       ...(taskId && taskId !== 'ALL' ? { taskId } : {}),
       ...(status && status !== 'ALL' ? { status } : {}),
+      ...(managerId ? { project: { projectManagerId: managerId } } : {}),
       ...(startDate || endDate
         ? {
             startTime: {
@@ -29,11 +70,7 @@ export const timelogRepository = {
 
     return prisma.timeLog.findMany({
       where,
-      include: {
-        project: { select: { projectName: true, projectCode: true } },
-        task: { select: { title: true } },
-        user: { select: { firstName: true, lastName: true, avatar: true } },
-      },
+      include: listInclude,
       orderBy: { startTime: 'desc' },
     });
   },
@@ -49,17 +86,13 @@ export const timelogRepository = {
     });
   },
 
-  // Stopwatch Timer Operations
   async getActiveTimer(userId: string) {
     return prisma.timeLog.findFirst({
       where: {
         userId,
         endTime: null,
       },
-      include: {
-        project: { select: { projectName: true, projectCode: true } },
-        task: { select: { title: true } },
-      },
+      include: listInclude,
     });
   },
 
@@ -71,13 +104,11 @@ export const timelogRepository = {
   }) {
     const { userId, projectId, taskId, description } = params;
 
-    // Check if active timer already exists
     const active = await this.getActiveTimer(userId);
     if (active) {
       throw new Error('You already have an active timer running');
     }
 
-    // Fetch user rate snapshot
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const hourlyRateSnapshot = user?.hourlyRate ?? 0;
 
@@ -91,6 +122,7 @@ export const timelogRepository = {
         hourlyRateSnapshot,
         status: 'DRAFT',
       },
+      include: listInclude,
     });
   },
 
@@ -102,31 +134,21 @@ export const timelogRepository = {
 
     const endTime = new Date();
     const diffMs = endTime.getTime() - new Date(active.startTime).getTime();
-    const duration = Math.max(0.01, Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100); // round to 2 decimal places
+    const duration = Math.max(0.01, roundHours(diffMs / (1000 * 60 * 60)));
 
-    // Calculate actual hours for Task if linked
-    if (active.taskId) {
-      await prisma.task.update({
-        where: { id: active.taskId },
-        data: {
-          actualHours: {
-            increment: duration,
-          },
-        },
-      });
-    }
-
-    return prisma.timeLog.update({
+    const updated = await prisma.timeLog.update({
       where: { id: active.id },
       data: {
         endTime,
         duration,
-        status: 'DRAFT', // Remains draft until submitted by user
+        status: 'DRAFT',
       },
+      include: listInclude,
     });
+    await syncTimeTargets(updated.projectId, updated.taskId);
+    return updated;
   },
 
-  // Manual Time Log Entry
   async createManualEntry(
     userId: string,
     data: {
@@ -143,7 +165,6 @@ export const timelogRepository = {
     const start = new Date(startTime);
     const end = new Date(endTime);
 
-    // Overlap validation
     const overlap = await prisma.timeLog.findFirst({
       where: {
         userId,
@@ -157,24 +178,12 @@ export const timelogRepository = {
     }
 
     const diffMs = end.getTime() - start.getTime();
-    const duration = Math.max(0.01, Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100);
+    const duration = Math.max(0.01, roundHours(diffMs / (1000 * 60 * 60)));
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     const hourlyRateSnapshot = user?.hourlyRate ?? 0;
 
-    // Update Task actual hours
-    if (taskId) {
-      await prisma.task.update({
-        where: { id: taskId },
-        data: {
-          actualHours: {
-            increment: duration,
-          },
-        },
-      });
-    }
-
-    return prisma.timeLog.create({
+    const created = await prisma.timeLog.create({
       data: {
         userId,
         projectId,
@@ -187,7 +196,10 @@ export const timelogRepository = {
         hourlyRateSnapshot,
         status: 'DRAFT',
       },
+      include: listInclude,
     });
+    await syncTimeTargets(projectId, taskId || null);
+    return created;
   },
 
   async update(id: string, data: Partial<Prisma.TimeLogUpdateInput>) {
@@ -197,19 +209,27 @@ export const timelogRepository = {
       throw new Error('Approved timesheet logs are read-only');
     }
 
-    // Recompute duration if times changed
-    let updatedData = { ...data };
+    const updatedData: Prisma.TimeLogUpdateInput = { ...data };
     if (data.startTime || data.endTime) {
       const start = new Date((data.startTime as string) || entry.startTime);
       const end = new Date((data.endTime as string) || entry.endTime || new Date());
       const diffMs = end.getTime() - start.getTime();
-      updatedData.duration = Math.max(0.01, Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100);
+      updatedData.duration = Math.max(0.01, roundHours(diffMs / (1000 * 60 * 60)));
     }
 
-    return prisma.timeLog.update({
+    const updated = await prisma.timeLog.update({
       where: { id },
       data: updatedData,
+      include: listInclude,
     });
+    await syncTimeTargets(entry.projectId, entry.taskId);
+    if (updated.projectId !== entry.projectId) {
+      await syncProjectActualHours(updated.projectId);
+    }
+    if (updated.taskId !== entry.taskId) {
+      await syncTaskActualHours(updated.taskId);
+    }
+    return updated;
   },
 
   async delete(id: string) {
@@ -218,31 +238,41 @@ export const timelogRepository = {
     if (entry.status === 'APPROVED') {
       throw new Error('Approved time logs cannot be deleted');
     }
-    return prisma.timeLog.delete({ where: { id } });
+    const deleted = await prisma.timeLog.delete({ where: { id } });
+    await syncTimeTargets(entry.projectId, entry.taskId);
+    return deleted;
   },
 
   async submit(id: string) {
-    return prisma.timeLog.update({
+    const updated = await prisma.timeLog.update({
       where: { id },
       data: { status: 'SUBMITTED' },
+      include: listInclude,
     });
+    await syncTimeTargets(updated.projectId, updated.taskId);
+    return updated;
   },
 
   async approve(id: string) {
-    return prisma.timeLog.update({
+    const updated = await prisma.timeLog.update({
       where: { id },
       data: { status: 'APPROVED' },
+      include: listInclude,
     });
+    await syncTimeTargets(updated.projectId, updated.taskId);
+    return updated;
   },
 
   async reject(id: string) {
-    return prisma.timeLog.update({
+    const updated = await prisma.timeLog.update({
       where: { id },
       data: { status: 'REJECTED' },
+      include: listInclude,
     });
+    await syncTimeTargets(updated.projectId, updated.taskId);
+    return updated;
   },
 
-  // Productivity analytics aggregation
   async getProductivityReport(params: {
     startDate?: string;
     endDate?: string;
@@ -253,8 +283,9 @@ export const timelogRepository = {
 
     const where: Prisma.TimeLogWhereInput = {
       status: 'APPROVED',
-      ...(userId ? { userId } : {}),
-      ...(projectId ? { projectId } : {}),
+      endTime: { not: null },
+      ...(userId && userId !== 'ALL' ? { userId } : {}),
+      ...(projectId && projectId !== 'ALL' ? { projectId } : {}),
       ...(startDate || endDate
         ? {
             startTime: {
@@ -265,32 +296,71 @@ export const timelogRepository = {
         : {}),
     };
 
-    const logs = await prisma.timeLog.findMany({ where });
+    const logs = await prisma.timeLog.findMany({
+      where,
+      include: {
+        project: {
+          select: { id: true, projectName: true, client: { select: { companyName: true } } },
+        },
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
 
-    const totalHours = logs.reduce(
-      (acc: number, log: { duration: number }) => acc + log.duration,
-      0,
-    );
+    const totalHours = logs.reduce((acc, log) => acc + log.duration, 0);
     const billableHours = logs
-      .filter((l: { billable: boolean }) => l.billable)
-      .reduce((acc: number, log: { duration: number }) => acc + log.duration, 0);
+      .filter((log) => log.billable)
+      .reduce((acc, log) => acc + log.duration, 0);
     const nonBillableHours = totalHours - billableHours;
     const billableAmount = logs
-      .filter((l: { billable: boolean }) => l.billable)
-      .reduce(
-        (acc: number, log: { duration: number; hourlyRateSnapshot: number }) =>
-          acc + log.duration * log.hourlyRateSnapshot,
-        0,
-      );
+      .filter((log) => log.billable)
+      .reduce((acc, log) => acc + log.duration * log.hourlyRateSnapshot, 0);
 
     const productivity = totalHours > 0 ? Math.round((billableHours / totalHours) * 100) : 0;
 
+    const breakdownMap = logs.reduce(
+      (map, log) => {
+        const current = map.get(log.projectId) ?? {
+          projectId: log.projectId,
+          projectName: log.project?.projectName ?? 'Unknown project',
+          clientName: log.project?.client?.companyName ?? 'No client',
+          hours: 0,
+          billableHours: 0,
+          billableAmount: 0,
+        };
+        current.hours += log.duration;
+        if (log.billable) {
+          current.billableHours += log.duration;
+          current.billableAmount += log.duration * log.hourlyRateSnapshot;
+        }
+        map.set(log.projectId, current);
+        return map;
+      },
+      new Map<
+        string,
+        {
+          projectId: string;
+          projectName: string;
+          clientName: string;
+          hours: number;
+          billableHours: number;
+          billableAmount: number;
+        }
+      >(),
+    );
+
+    const projectBreakdown = Array.from(breakdownMap.values()).map((item) => ({
+      ...item,
+      hours: roundHours(item.hours),
+      billableHours: roundHours(item.billableHours),
+      billableAmount: Math.round(item.billableAmount * 100) / 100,
+    }));
     return {
-      totalHours: Math.round(totalHours * 100) / 100,
-      billableHours: Math.round(billableHours * 100) / 100,
-      nonBillableHours: Math.round(nonBillableHours * 100) / 100,
+      totalHours: roundHours(totalHours),
+      billableHours: roundHours(billableHours),
+      nonBillableHours: roundHours(nonBillableHours),
       productivityPercentage: productivity,
       billableAmount: Math.round(billableAmount * 100) / 100,
+      projectBreakdown,
     };
   },
 };

@@ -97,6 +97,11 @@ export function ProjectDetailsPage() {
   const linkedMeetings = project?.meetingsLinked ?? [];
   const legacyMeetings = project?.meetings ?? [];
   const timeLogs = project?.timeLogs ?? [];
+  const approvedTimeLogs = timeLogs.filter((log) => log.status === 'APPROVED');
+  const approvedHours = approvedTimeLogs.reduce((sum, log) => sum + Number(log.duration || 0), 0);
+  const approvedBillableValue = approvedTimeLogs
+    .filter((log) => log.billable)
+    .reduce((sum, log) => sum + Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0), 0);
 
   const statusBadgeClass = (status: string) =>
     status === 'APPROVED'
@@ -1094,6 +1099,25 @@ export function ProjectDetailsPage() {
             <div className="flex justify-between items-center border-b border-border px-5 py-4">
               <h3 className="font-bold text-sm">Project Time Logs</h3>
             </div>
+
+            <div className="grid gap-3 border-b border-border px-5 py-4 sm:grid-cols-2">
+              <div className="rounded border border-border bg-background p-3">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Approved Hours
+                </span>
+                <span className="mt-1 block text-xl font-bold text-primary">
+                  {approvedHours.toFixed(2)} hrs
+                </span>
+              </div>
+              <div className="rounded border border-border bg-background p-3">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Approved Billable Value
+                </span>
+                <span className="mt-1 block text-xl font-bold text-emerald-600">
+                  ${approvedBillableValue.toLocaleString()}
+                </span>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -1102,6 +1126,7 @@ export function ProjectDetailsPage() {
                     <th className="px-5 py-3">Team Member</th>
                     <th className="px-5 py-3">Task</th>
                     <th className="px-5 py-3">Hours</th>
+                    <th className="px-5 py-3">Value</th>
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Date</th>
                   </tr>
@@ -1109,7 +1134,7 @@ export function ProjectDetailsPage() {
                 <tbody className="divide-y divide-border">
                   {timeLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-5 py-8 text-center text-foreground/45 italic">
+                      <td colSpan={7} className="px-5 py-8 text-center text-foreground/45 italic">
                         No time entries logged for this project.
                       </td>
                     </tr>
@@ -1131,6 +1156,11 @@ export function ProjectDetailsPage() {
                           {log.task?.title || 'No task linked'}
                         </td>
                         <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                        <td className="px-5 py-3.5 font-bold text-emerald-600">
+                          {log.billable
+                            ? `$${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
+                            : '-'}
+                        </td>
                         <td className="px-5 py-3.5">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusBadgeClass(log.status)}`}
@@ -1185,7 +1215,7 @@ export function ProjectDetailsPage() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-foreground/45">
+                      <td colSpan={7} className="px-6 py-12 text-center text-foreground/45">
                         No invoices found for this project.
                       </td>
                     </tr>

@@ -13,6 +13,14 @@ interface ReportData {
   nonBillableHours: number;
   productivityPercentage: number;
   billableAmount: number;
+  projectBreakdown?: Array<{
+    projectId: string;
+    projectName: string;
+    clientName: string;
+    hours: number;
+    billableHours: number;
+    billableAmount: number;
+  }>;
 }
 
 export function ReportsWorkspacePage() {
@@ -238,7 +246,7 @@ export function ReportsWorkspacePage() {
             <Card className="flex flex-col gap-4 justify-between">
               <div>
                 <h3 className="text-sm font-bold flex items-center gap-1.5">
-                  <DollarSign className="h-4.5 w-4.5 text-emerald-500" /> Projected Billable Value
+                  <DollarSign className="h-4.5 w-4.5 text-emerald-500" /> Approved Billable Value
                 </h3>
                 <p className="text-[11px] text-foreground/50 mt-1">
                   Accumulated invoice value based on employee hourly rates snapshots at logging
@@ -256,6 +264,39 @@ export function ReportsWorkspacePage() {
               </div>
             </Card>
           </div>
+          {report.projectBreakdown?.length ? (
+            <Card className="p-0 overflow-hidden">
+              <div className="border-b border-border px-5 py-4">
+                <h3 className="text-sm font-bold">Approved Hours by Project</h3>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 text-foreground/75">
+                      <th className="px-5 py-3">Project</th>
+                      <th className="px-5 py-3">Client</th>
+                      <th className="px-5 py-3">Approved Hours</th>
+                      <th className="px-5 py-3">Billable Hours</th>
+                      <th className="px-5 py-3">Billable Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {report.projectBreakdown.map((item) => (
+                      <tr key={item.projectId}>
+                        <td className="px-5 py-3 font-bold">{item.projectName}</td>
+                        <td className="px-5 py-3 text-foreground/60">{item.clientName}</td>
+                        <td className="px-5 py-3 font-semibold text-primary">{item.hours} hrs</td>
+                        <td className="px-5 py-3 font-semibold">{item.billableHours} hrs</td>
+                        <td className="px-5 py-3 font-bold text-emerald-600">
+                          ${item.billableAmount.toLocaleString()}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          ) : null}
         </div>
       )}
     </div>

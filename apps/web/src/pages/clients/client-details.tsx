@@ -132,7 +132,17 @@ export function ClientDetailsPage() {
   const activeProjectCount = clientProjects.filter(
     (project) => !['COMPLETED', 'CANCELLED'].includes(project.status),
   ).length;
-
+  const approvedHoursForProject = (project: NonNullable<Client['projects']>[number]) =>
+    (project.timeLogs ?? [])
+      .filter((log) => log.status === 'APPROVED')
+      .reduce((sum, log) => sum + Number(log.duration || 0), 0);
+  const approvedValueForProject = (project: NonNullable<Client['projects']>[number]) =>
+    (project.timeLogs ?? [])
+      .filter((log) => log.status === 'APPROVED' && log.billable)
+      .reduce(
+        (sum, log) => sum + Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0),
+        0,
+      );
   // --- Client Actions ---
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -878,13 +888,15 @@ export function ClientDetailsPage() {
                     <th className="px-6 py-4">Status</th>
                     <th className="px-6 py-4">Progress</th>
                     <th className="px-6 py-4">Budget</th>
+                    <th className="px-6 py-4">Approved Hours</th>
+                    <th className="px-6 py-4">Billable Value</th>
                     <th className="px-6 py-4">Deadline</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {clientProjects.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-6 py-12 text-center text-foreground/45">
+                      <td colSpan={7} className="px-6 py-12 text-center text-foreground/45">
                         No projects active for this client yet.
                       </td>
                     </tr>
@@ -919,6 +931,12 @@ export function ClientDetailsPage() {
                         </td>
                         <td className="px-6 py-4 font-semibold">
                           ${Number(project.budget).toLocaleString()}
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-primary">
+                          {approvedHoursForProject(project).toFixed(2)} hrs
+                        </td>
+                        <td className="px-6 py-4 font-semibold text-emerald-600">
+                          ${approvedValueForProject(project).toLocaleString()}
                         </td>
                         <td className="px-6 py-4 text-foreground/70">
                           {new Date(project.deadline).toLocaleDateString()}
@@ -1019,7 +1037,7 @@ export function ClientDetailsPage() {
                   <tbody className="divide-y divide-border">
                     {client.files?.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-12 text-center text-foreground/50">
+                        <td colSpan={7} className="px-6 py-12 text-center text-foreground/50">
                           No documents uploaded. Supported: PDF, Images, Word, Excel, ZIP.
                         </td>
                       </tr>

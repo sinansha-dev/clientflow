@@ -74,8 +74,8 @@ export function TimesheetWorkspacePage() {
       const res = await api.get('/timelogs');
       setLogs(res.data.data ?? []);
 
-      // If Admin, load submitted pending logs
-      if (user?.role === 'ADMIN') {
+      // Admins see all submitted logs; project managers see submitted logs for managed projects.
+      if (user?.role === 'ADMIN' || user?.role === 'DEVELOPER') {
         const pRes = await api.get('/timelogs?status=SUBMITTED');
         setPendingLogs(pRes.data.data ?? []);
       }
@@ -375,7 +375,7 @@ export function TimesheetWorkspacePage() {
       </Card>
 
       {/* ADMIN PENDING TIME APPROVALS BOARD */}
-      {isAdmin && pendingLogs.length > 0 && (
+      {pendingLogs.length > 0 && (
         <Card className="border border-orange-500/20 bg-orange-500/5">
           <h3 className="text-sm font-bold flex items-center gap-2 mb-4">
             <AlertCircle className="h-4.5 w-4.5 text-orange-500" /> Pending Timesheet Approvals (
@@ -439,6 +439,7 @@ export function TimesheetWorkspacePage() {
                 <th className="px-5 py-3">Description</th>
                 <th className="px-5 py-3">Project / Task</th>
                 <th className="px-5 py-3">Hours</th>
+                <th className="px-5 py-3">Value</th>
                 <th className="px-5 py-3">Status</th>
                 <th className="px-5 py-3">Date</th>
                 <th className="px-5 py-3 text-right">Actions</th>
@@ -447,13 +448,13 @@ export function TimesheetWorkspacePage() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-foreground/45">
+                  <td colSpan={7} className="px-5 py-8 text-center text-foreground/45">
                     Loading time sheets...
                   </td>
                 </tr>
               ) : logs.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-8 text-center text-foreground/45 italic">
+                  <td colSpan={7} className="px-5 py-8 text-center text-foreground/45 italic">
                     No time entries logged.
                   </td>
                 </tr>
@@ -479,6 +480,11 @@ export function TimesheetWorkspacePage() {
                       </div>
                     </td>
                     <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                    <td className="px-5 py-3.5 font-bold text-emerald-600">
+                      {log.billable
+                        ? `$${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
+                        : '-'}
+                    </td>
                     <td className="px-5 py-3.5">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-bold ${

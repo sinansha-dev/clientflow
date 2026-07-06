@@ -127,6 +127,20 @@ export const clientRepository = {
                 avatar: true,
               },
             },
+            timeLogs: {
+              where: { status: 'APPROVED', endTime: { not: null } },
+              include: {
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    hourlyRate: true,
+                  },
+                },
+              },
+              orderBy: { startTime: 'desc' },
+            },
           },
           orderBy: { createdAt: 'desc' },
         },
