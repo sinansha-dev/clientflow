@@ -1,5 +1,6 @@
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { projectRepository } from './project.repository';
 
 export const taskRepository = {
   async list(params: {
@@ -166,9 +167,17 @@ export const taskRepository = {
 
     const position = lastTask ? lastTask.position + 1000 : 1000;
 
-    return prisma.task.create({
+    const formattedTaskData: typeof taskData = { ...taskData };
+    if (taskData.startDate) {
+      formattedTaskData.startDate = new Date(taskData.startDate);
+    }
+    if (taskData.dueDate) {
+      formattedTaskData.dueDate = new Date(taskData.dueDate);
+    }
+
+    const task = await prisma.task.create({
       data: {
-        ...taskData,
+        ...formattedTaskData,
         position,
         ...(assigneeIds && assigneeIds.length > 0
           ? {
@@ -190,6 +199,9 @@ export const taskRepository = {
         labels: true,
       },
     });
+
+    await projectRepository.recalculateProgress(task.projectId);
+    return task;
   },
 
   async update(
@@ -198,9 +210,17 @@ export const taskRepository = {
   ) {
     const { assigneeIds, labelIds, ...taskData } = data;
 
+    const formattedTaskData: typeof taskData = { ...taskData };
+    if (taskData.startDate) {
+      formattedTaskData.startDate = new Date(taskData.startDate as string);
+    }
+    if (taskData.dueDate) {
+      formattedTaskData.dueDate = new Date(taskData.dueDate as string);
+    }
+
     // Build connections/disconnections
     const updateData: Prisma.TaskUpdateInput = {
-      ...taskData,
+      ...formattedTaskData,
     };
 
     if (assigneeIds) {
@@ -221,7 +241,7 @@ export const taskRepository = {
       updateData.completedAt = null;
     }
 
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: updateData,
       include: {
@@ -229,13 +249,18 @@ export const taskRepository = {
         labels: true,
       },
     });
+
+    await projectRepository.recalculateProgress(task.projectId);
+    return task;
   },
 
   async softDelete(id: string) {
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+    await projectRepository.recalculateProgress(task.projectId);
+    return task;
   },
 
   // Mid-point reordering for Kanban card move
@@ -275,10 +300,12 @@ export const taskRepository = {
       updateData.completedAt = null;
     }
 
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: updateData,
     });
+    await projectRepository.recalculateProgress(task.projectId);
+    return task;
   },
 
   // Comments Operations

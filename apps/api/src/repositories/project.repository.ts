@@ -330,21 +330,25 @@ export const projectRepository = {
       where: { id },
       data,
     });
-    return updated;
+    await this.recalculateProgress(id);
+    return prisma.project.findUnique({ where: { id } }) || updated;
   },
 
   async archive(id: string) {
-    return prisma.project.update({
+    const updated = await prisma.project.update({
       where: { id },
-      data: { status: 'COMPLETED', archivedAt: new Date() },
+      data: { status: 'COMPLETED', archivedAt: new Date(), progress: 100 },
     });
+    return updated;
   },
 
   async restore(id: string) {
-    return prisma.project.update({
+    const updated = await prisma.project.update({
       where: { id },
       data: { status: 'PLANNING', archivedAt: null },
     });
+    await this.recalculateProgress(id);
+    return prisma.project.findUnique({ where: { id } }) || updated;
   },
 
   async softDelete(id: string) {
@@ -395,9 +399,11 @@ export const projectRepository = {
 
   // Milestones Operations
   async addMilestone(projectId: string, data: Omit<Prisma.MilestoneCreateInput, 'project'>) {
+    const { dueDate, ...rest } = data;
     const milestone = await prisma.milestone.create({
       data: {
-        ...data,
+        ...rest,
+        dueDate: dueDate ? new Date(dueDate as string) : new Date(),
         projectId,
       },
     });
@@ -406,9 +412,14 @@ export const projectRepository = {
   },
 
   async updateMilestone(id: string, projectId: string, data: Prisma.MilestoneUpdateInput) {
+    const { dueDate, ...rest } = data;
+    const updateData: Prisma.MilestoneUpdateInput = { ...rest };
+    if (dueDate) {
+      updateData.dueDate = new Date(dueDate as string);
+    }
     const milestone = await prisma.milestone.update({
       where: { id },
-      data,
+      data: updateData,
     });
     await this.recalculateProgress(projectId);
     return milestone;
@@ -423,24 +434,23 @@ export const projectRepository = {
   },
 
   async recalculateProgress(projectId: string) {
-    const milestones = await prisma.milestone.findMany({ where: { projectId } });
-    if (milestones.length === 0) {
-      await prisma.project.update({ where: { id: projectId }, data: { progress: 0 } });
-      return;
-    }
-    const completed = milestones.filter((m) => m.status === 'COMPLETED').length;
-    const progress = Math.round((completed / milestones.length) * 100);
+    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) return;
 
-    // Update status to COMPLETED if progress is 100%
-    const statusUpdate =
-      progress === 100 ? { status: 'COMPLETED', completionDate: new Date() } : {};
+    const statusProgressMap: Record<string, number> = {
+      PLANNING: 10,
+      DEVELOPMENT: 40,
+      TESTING: 70,
+      CLIENT_REVIEW: 90,
+      COMPLETED: 100,
+      ON_HOLD: 0,
+    };
+
+    const progress = statusProgressMap[project.status] ?? 0;
 
     await prisma.project.update({
       where: { id: projectId },
-      data: {
-        progress,
-        ...statusUpdate,
-      },
+      data: { progress },
     });
   },
 

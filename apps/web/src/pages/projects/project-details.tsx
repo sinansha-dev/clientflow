@@ -654,7 +654,13 @@ export function ProjectDetailsPage() {
                 </div>
                 <div className="mt-2">
                   <span className="text-xs text-foreground/50 block">Spent so far</span>
-                  <span className="text-base font-bold text-foreground/75">$0.00</span>
+                  <span className="text-base font-bold text-foreground/75">
+                    $
+                    {approvedBillableValue.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
                 </div>
               </div>
             </Card>
