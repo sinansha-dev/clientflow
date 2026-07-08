@@ -1,4 +1,14 @@
-import { Bell, Menu, Moon, Search, Sun, UserCircle, ChevronLeft, ChevronRight } from 'lucide-react';
+import {
+  Bell,
+  Menu,
+  Moon,
+  Search,
+  Sun,
+  UserCircle,
+  ChevronLeft,
+  ChevronRight,
+  Palette,
+} from 'lucide-react';
 import { useEffect, useState, useRef } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/auth-store';
@@ -7,6 +17,53 @@ import { Button } from '../components/ui/button';
 import { navItems } from '../nav';
 import { api } from '../lib/api';
 
+type WorkspaceAccent = 'emerald' | 'blue' | 'rose' | 'amber';
+type WorkspaceDensity = 'comfortable' | 'compact';
+
+const workspaceAccents: Record<
+  WorkspaceAccent,
+  {
+    label: string;
+    swatch: string;
+    primary: string;
+    text: string;
+    bg: string;
+    border: string;
+  }
+> = {
+  emerald: {
+    label: 'Emerald',
+    swatch: 'bg-emerald-400',
+    primary: '152 69% 45%',
+    text: 'text-emerald-400',
+    bg: 'bg-emerald-400/10',
+    border: 'border-emerald-400/25',
+  },
+  blue: {
+    label: 'Blue',
+    swatch: 'bg-[#4dabf7]',
+    primary: '204 90% 60%',
+    text: 'text-[#4dabf7]',
+    bg: 'bg-[#4dabf7]/10',
+    border: 'border-[#4dabf7]/25',
+  },
+  rose: {
+    label: 'Rose',
+    swatch: 'bg-[#ec8c9f]',
+    primary: '346 72% 74%',
+    text: 'text-[#ec8c9f]',
+    bg: 'bg-[#ec8c9f]/10',
+    border: 'border-[#ec8c9f]/25',
+  },
+  amber: {
+    label: 'Amber',
+    swatch: 'bg-[#f59f00]',
+    primary: '38 92% 50%',
+    text: 'text-[#f59f00]',
+    bg: 'bg-[#f59f00]/10',
+    border: 'border-[#f59f00]/25',
+  },
+};
 export function AppLayout() {
   const [open, setOpen] = useState(false);
   const [isCollapsed, setIsCollapsed] = useState(() => {
@@ -28,7 +85,17 @@ export function AppLayout() {
   } | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [workspaceAccent, setWorkspaceAccent] = useState<WorkspaceAccent>(() => {
+    const stored = localStorage.getItem('workspace-accent') as WorkspaceAccent | null;
+    return stored && stored in workspaceAccents ? stored : 'blue';
+  });
+  const [workspaceDensity, setWorkspaceDensity] = useState<WorkspaceDensity>(() => {
+    const stored = localStorage.getItem('workspace-density') as WorkspaceDensity | null;
+    return stored === 'compact' ? stored : 'comfortable';
+  });
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const customizeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -53,13 +120,30 @@ export function AppLayout() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setShowDropdown(false);
+      }
+      if (customizeRef.current && !customizeRef.current.contains(target)) {
+        setIsCustomizeOpen(false);
       }
     }
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    const accent = workspaceAccents[workspaceAccent];
+    localStorage.setItem('workspace-accent', workspaceAccent);
+    document.documentElement.style.setProperty('--primary', accent.primary);
+    window.dispatchEvent(new CustomEvent('workspace-preferences-changed'));
+  }, [workspaceAccent]);
+
+  useEffect(() => {
+    localStorage.setItem('workspace-density', workspaceDensity);
+    document.documentElement.dataset.density = workspaceDensity;
+    window.dispatchEvent(new CustomEvent('workspace-preferences-changed'));
+  }, [workspaceDensity]);
 
   const handleToggleSidebar = () => {
     setIsCollapsed((prev) => {
@@ -77,7 +161,7 @@ export function AppLayout() {
 
   const sidebar = (
     <aside
-      className={`flex h-full flex-col border-r border-border bg-card transition-all duration-300 ${
+      className={`flex h-full flex-col border-r border-white/10 bg-[#25272a] transition-all duration-300 ${
         isCollapsed ? 'lg:w-[72px] w-72' : 'w-72'
       }`}
     >
@@ -107,8 +191,8 @@ export function AppLayout() {
                 isCollapsed ? 'lg:justify-center lg:w-10 lg:p-0 w-full gap-3' : 'gap-3 w-full'
               } ${
                 isActive
-                  ? 'bg-primary text-white shadow-sm'
-                  : 'text-foreground/75 hover:bg-muted hover:text-foreground'
+                  ? 'bg-primary text-white shadow-sm shadow-primary/20'
+                  : 'text-zinc-300 hover:bg-white/10 hover:text-white'
               }`
             }
             title={isCollapsed ? item.label : undefined}
@@ -127,7 +211,7 @@ export function AppLayout() {
         {/* Toggle Button - desktop only */}
         <button
           onClick={handleToggleSidebar}
-          className={`mx-3 hidden lg:flex h-9 items-center justify-center rounded-md border border-border bg-card/50 text-foreground/60 hover:bg-muted hover:text-foreground transition-all duration-200 ${
+          className={`mx-3 hidden lg:flex h-9 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10 hover:text-white transition-all duration-200 ${
             isCollapsed ? 'w-10 p-0' : 'px-3 gap-2 text-xs font-semibold'
           }`}
           aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -144,20 +228,20 @@ export function AppLayout() {
         </button>
 
         <div
-          className={`border-t border-border p-4 text-xs text-foreground/60 transition-all duration-300 ${
+          className={`border-t border-white/10 p-4 text-xs text-zinc-400 transition-all duration-300 ${
             isCollapsed ? 'lg:text-center lg:px-1' : ''
           }`}
         >
           {isCollapsed ? (
             <span
-              className="hidden lg:inline font-bold text-foreground capitalize"
+              className="hidden lg:inline font-bold text-white capitalize"
               title={`Role: ${user?.role}`}
             >
               {user?.role?.charAt(0)}
             </span>
           ) : null}
           <span className={isCollapsed ? 'lg:hidden' : ''}>
-            Role: <span className="font-semibold text-foreground">{user?.role}</span>
+            Role: <span className="font-semibold text-white">{user?.role}</span>
           </span>
         </div>
       </div>
@@ -180,7 +264,7 @@ export function AppLayout() {
       ) : null}
 
       <div className="min-w-0">
-        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur md:px-6">
+        <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-white/10 bg-[#0d0e0e]/95 px-4 backdrop-blur md:px-6">
           <button
             aria-label="Open navigation"
             className="rounded-md p-2 hover:bg-muted lg:hidden"
@@ -235,7 +319,7 @@ export function AppLayout() {
                           }}
                           className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-xs transition-colors flex justify-between items-center"
                         >
-                          <span className="font-semibold text-foreground">{p.projectName}</span>
+                          <span className="font-semibold text-white">{p.projectName}</span>
                           <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-mono">
                             {p.projectCode}
                           </span>
@@ -294,7 +378,7 @@ export function AppLayout() {
                           }}
                           className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-xs transition-colors flex justify-between items-center"
                         >
-                          <span className="font-semibold text-foreground">{c.companyName}</span>
+                          <span className="font-semibold text-white">{c.companyName}</span>
                           <span className="text-[10px] text-foreground/45">{c.email}</span>
                         </button>
                       ))}
@@ -319,7 +403,7 @@ export function AppLayout() {
                           }}
                           className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-muted text-xs transition-colors flex justify-between items-center"
                         >
-                          <span className="font-semibold text-foreground">
+                          <span className="font-semibold text-white">
                             {m.firstName} {m.lastName}
                           </span>
                           <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded capitalize">
@@ -344,7 +428,7 @@ export function AppLayout() {
           </div>
           <button
             aria-label="Toggle theme"
-            className="ml-auto rounded-md p-2 hover:bg-muted"
+            className="ml-auto rounded-md p-2 text-zinc-200 hover:bg-white/10"
             type="button"
             onClick={toggleTheme}
           >
@@ -352,20 +436,87 @@ export function AppLayout() {
           </button>
           <button
             aria-label="Notifications"
-            className="rounded-md p-2 hover:bg-muted"
+            className="rounded-md p-2 text-zinc-200 hover:bg-white/10"
             type="button"
           >
             <Bell className="h-5 w-5" />
           </button>
           <button
             aria-label="Profile"
-            className="flex items-center gap-2 rounded-md p-2 hover:bg-muted"
+            className="flex items-center gap-2 rounded-md p-2 text-zinc-200 hover:bg-white/10"
             type="button"
             onClick={() => navigate('/profile')}
           >
             <UserCircle className="h-5 w-5" />
             <span className="hidden text-sm font-medium sm:inline">{user?.firstName}</span>
           </button>
+          <div className="relative" ref={customizeRef}>
+            <button
+              aria-label="Customize workspace"
+              className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold text-zinc-200 hover:bg-white/10"
+              type="button"
+              onClick={() => setIsCustomizeOpen((open) => !open)}
+            >
+              <Palette className="h-4 w-4" />
+              <span className="hidden lg:inline">Customize</span>
+            </button>
+            {isCustomizeOpen && (
+              <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#25272a] p-4 text-left shadow-2xl shadow-black/40">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Accent color
+                  </p>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {(Object.keys(workspaceAccents) as WorkspaceAccent[]).map((key) => {
+                      const item = workspaceAccents[key];
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setWorkspaceAccent(key)}
+                          className={`flex h-10 items-center justify-center rounded-lg border transition ${
+                            workspaceAccent === key
+                              ? 'border-white/40 bg-white/10'
+                              : 'border-white/10 bg-white/[0.03] hover:bg-white/10'
+                          }`}
+                          title={item.label}
+                        >
+                          <span className={`h-4 w-4 rounded-full ${item.swatch}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Density
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {(['comfortable', 'compact'] as WorkspaceDensity[]).map((density) => {
+                      const active = workspaceDensity === density;
+                      const accent = workspaceAccents[workspaceAccent];
+                      return (
+                        <button
+                          key={density}
+                          type="button"
+                          onClick={() => setWorkspaceDensity(density)}
+                          className={`rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition ${
+                            active
+                              ? `${accent.bg} ${accent.border} ${accent.text}`
+                              : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10'
+                          }`}
+                        >
+                          {density}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          `r`n{' '}
           <Button
             variant="ghost"
             onClick={() => {

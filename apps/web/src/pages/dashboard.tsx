@@ -15,7 +15,6 @@ import {
   UsersRound,
   ChevronDown,
   Check,
-  Palette,
 } from 'lucide-react';
 
 type DashboardAccent = 'emerald' | 'blue' | 'rose' | 'amber';
@@ -82,13 +81,12 @@ export function DashboardPage() {
   // Modal states
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
   const [dashboardAccent, setDashboardAccent] = useState<DashboardAccent>(() => {
-    const stored = localStorage.getItem('dashboard-accent') as DashboardAccent | null;
+    const stored = localStorage.getItem('workspace-accent') as DashboardAccent | null;
     return stored && stored in accentStyles ? stored : 'blue';
   });
   const [dashboardDensity, setDashboardDensity] = useState<DashboardDensity>(() => {
-    const stored = localStorage.getItem('dashboard-density') as DashboardDensity | null;
+    const stored = localStorage.getItem('workspace-density') as DashboardDensity | null;
     return stored === 'compact' ? stored : 'comfortable';
   });
 
@@ -120,12 +118,19 @@ export function DashboardPage() {
   }, [fetchDashboardStats]);
 
   useEffect(() => {
-    localStorage.setItem('dashboard-accent', dashboardAccent);
-  }, [dashboardAccent]);
+    const syncWorkspacePreferences = () => {
+      const storedAccent = localStorage.getItem('workspace-accent') as DashboardAccent | null;
+      const storedDensity = localStorage.getItem('workspace-density') as DashboardDensity | null;
+      setDashboardAccent(storedAccent && storedAccent in accentStyles ? storedAccent : 'blue');
+      setDashboardDensity(storedDensity === 'compact' ? 'compact' : 'comfortable');
+    };
 
-  useEffect(() => {
-    localStorage.setItem('dashboard-density', dashboardDensity);
-  }, [dashboardDensity]);
+    syncWorkspacePreferences();
+    window.addEventListener('workspace-preferences-changed', syncWorkspacePreferences);
+    return () => {
+      window.removeEventListener('workspace-preferences-changed', syncWorkspacePreferences);
+    };
+  }, []);
 
   // Date Formatting
   const formattedDate = new Date().toLocaleDateString('en-US', {
@@ -315,79 +320,18 @@ export function DashboardPage() {
             <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
           </button>
 
-          <div className="flex items-center gap-4 px-4 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/5 text-zinc-300">
+          <div
+            className={`flex items-center gap-4 px-4 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/5 text-zinc-300 ${accent.border}`}
+          >
             <span className="flex items-center gap-1.5">
-              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              <CheckCircle2 className={`h-4 w-4 ${accent.text}`} />
               {completedTasksCount} tasks completed
             </span>
             <div className="h-3.5 w-[1px] bg-white/10" />
             <span className="flex items-center gap-1.5">
-              <UsersRound className="h-4 w-4 text-blue-400" />
+              <UsersRound className={`h-4 w-4 ${accent.text}`} />
               {collaboratorsCount} collaborators
             </span>
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsCustomizeOpen((open) => !open)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition"
-            >
-              <Palette className="h-3.5 w-3.5" />
-              <span>Customize</span>
-            </button>
-
-            {isCustomizeOpen && (
-              <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-white/10 bg-[#25272a] p-4 text-left shadow-2xl shadow-black/40">
-                <div className="mb-4">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    Accent color
-                  </p>
-                  <div className="mt-2 grid grid-cols-4 gap-2">
-                    {(Object.keys(accentStyles) as DashboardAccent[]).map((key) => {
-                      const item = accentStyles[key];
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setDashboardAccent(key)}
-                          className={`flex h-10 items-center justify-center rounded-lg border transition ${
-                            dashboardAccent === key
-                              ? 'border-white/40 bg-white/10'
-                              : 'border-white/10 bg-white/[0.03] hover:bg-white/10'
-                          }`}
-                          title={item.label}
-                        >
-                          <span className={`h-4 w-4 rounded-full ${item.swatch}`} />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
-                    Density
-                  </p>
-                  <div className="mt-2 grid grid-cols-2 gap-2">
-                    {(['comfortable', 'compact'] as DashboardDensity[]).map((density) => (
-                      <button
-                        key={density}
-                        type="button"
-                        onClick={() => setDashboardDensity(density)}
-                        className={`rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition ${
-                          dashboardDensity === density
-                            ? `${accent.bg} ${accent.border} ${accent.text}`
-                            : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10'
-                        }`}
-                      >
-                        {density}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
