@@ -170,9 +170,13 @@ export const taskRepository = {
     const formattedTaskData: typeof taskData = { ...taskData };
     if (taskData.startDate) {
       formattedTaskData.startDate = new Date(taskData.startDate);
+    } else if (taskData.startDate === '') {
+      delete formattedTaskData.startDate;
     }
     if (taskData.dueDate) {
       formattedTaskData.dueDate = new Date(taskData.dueDate);
+    } else if (taskData.dueDate === '') {
+      delete formattedTaskData.dueDate;
     }
 
     const task = await prisma.task.create({
@@ -213,9 +217,13 @@ export const taskRepository = {
     const formattedTaskData: typeof taskData = { ...taskData };
     if (taskData.startDate) {
       formattedTaskData.startDate = new Date(taskData.startDate as string);
+    } else if (taskData.startDate === '') {
+      formattedTaskData.startDate = null;
     }
     if (taskData.dueDate) {
       formattedTaskData.dueDate = new Date(taskData.dueDate as string);
+    } else if (taskData.dueDate === '') {
+      formattedTaskData.dueDate = null;
     }
 
     // Build connections/disconnections
@@ -259,6 +267,17 @@ export const taskRepository = {
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    // Cascade soft-delete to subtasks
+    const subtasks = await prisma.task.findMany({
+      where: { parentTaskId: id, deletedAt: null },
+      select: { id: true },
+    });
+
+    for (const sub of subtasks) {
+      await this.softDelete(sub.id);
+    }
+
     await projectRepository.recalculateProgress(task.projectId);
     return task;
   },

@@ -352,10 +352,23 @@ export const projectRepository = {
   },
 
   async softDelete(id: string) {
-    return prisma.project.update({
+    const updatedProject = await prisma.project.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    // Cascade soft-delete to project tasks
+    const tasks = await prisma.task.findMany({
+      where: { projectId: id, deletedAt: null },
+      select: { id: true },
+    });
+
+    const { taskRepository } = require('./task.repository');
+    for (const task of tasks) {
+      await taskRepository.softDelete(task.id);
+    }
+
+    return updatedProject;
   },
 
   // Team Management

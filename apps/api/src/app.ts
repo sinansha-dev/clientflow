@@ -29,6 +29,7 @@ import {
   expenseRoutes,
   financeReportRoutes,
 } from './routes/finance.routes';
+import { searchRoutes } from './routes/search.routes';
 import { errorMiddleware } from './middleware/error';
 import { requestLogger } from './middleware/request-logger';
 
@@ -44,7 +45,7 @@ app.use(
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    limit: 300,
+    limit: env.NODE_ENV === 'production' ? 300 : 100000,
     standardHeaders: 'draft-7',
     legacyHeaders: false,
   }),
@@ -82,6 +83,7 @@ app.use('/invoices', invoiceRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/expenses', expenseRoutes);
 app.use('/reports', financeReportRoutes);
+app.use('/search', searchRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found', errors: [] });

@@ -2,6 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../../lib/api';
 import { TasksBoard } from '../tasks/tasks-board';
+import { TasksListPage } from '../tasks/tasks-list';
+import { TasksCalendar } from '../tasks/tasks-calendar';
+import { TasksDashboard } from '../tasks/tasks-dashboard';
+import { Kanban, ListTodo, LayoutDashboard } from 'lucide-react';
 import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { Input } from '../../components/ui/input';
@@ -49,6 +53,9 @@ export function ProjectDetailsPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<ProjectTab>('overview');
+  const [tasksViewMode, setTasksViewMode] = useState<'board' | 'list' | 'calendar' | 'dashboard'>(
+    'board',
+  );
 
   // Load staff for PM/team assignment editing
   const [staff, setStaff] = useState<AuthUser[]>([]);
@@ -459,11 +466,11 @@ export function ProjectDetailsPage() {
             { id: 'files', label: 'Files', icon: Upload },
             { id: 'meetings', label: 'Meetings', icon: Video },
             { id: 'timelogs', label: 'Time Logs', icon: Clock },
-            { id: 'invoices', label: 'Invoices', icon: DollarSign },
+            isAdmin && { id: 'invoices', label: 'Invoices', icon: DollarSign },
             { id: 'deployments', label: 'Deployments', icon: Rocket },
             { id: 'notes', label: 'Notes', icon: Shield },
             { id: 'activity', label: 'Activity', icon: Clock },
-          ] as const
+          ].filter(Boolean) as any[]
         ).map((tab) => (
           <button
             key={tab.id}
@@ -592,7 +599,7 @@ export function ProjectDetailsPage() {
 
         {/* --- OVERVIEW TAB --- */}
         {activeTab === 'overview' && (
-          <div className="grid gap-6 md:grid-cols-3">
+          <div className={`grid gap-6 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
             {/* Countdown / Health */}
             <Card className="flex flex-col gap-4 justify-between bg-primary/5 border border-primary/10">
               <div>
@@ -641,29 +648,31 @@ export function ProjectDetailsPage() {
               </div>
             </Card>
 
-            <Card className="flex flex-col gap-4 justify-between">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">
-                  Financials
-                </span>
-                <div className="mt-4">
-                  <span className="text-xs text-foreground/50 block">Project Budget</span>
-                  <span className="text-2xl font-bold text-foreground">
-                    ${project.budget.toLocaleString()}
+            {isAdmin && (
+              <Card className="flex flex-col gap-4 justify-between">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">
+                    Financials
                   </span>
+                  <div className="mt-4">
+                    <span className="text-xs text-foreground/50 block">Project Budget</span>
+                    <span className="text-2xl font-bold text-foreground">
+                      ${project.budget.toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="mt-2">
+                    <span className="text-xs text-foreground/50 block">Spent so far</span>
+                    <span className="text-base font-bold text-foreground/75">
+                      $
+                      {approvedBillableValue.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
                 </div>
-                <div className="mt-2">
-                  <span className="text-xs text-foreground/50 block">Spent so far</span>
-                  <span className="text-base font-bold text-foreground/75">
-                    $
-                    {approvedBillableValue.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </span>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
             <Card className="flex flex-col gap-4 justify-between">
               <div>
@@ -929,8 +938,41 @@ export function ProjectDetailsPage() {
 
         {/* --- TASKS TAB --- */}
         {activeTab === 'tasks' && (
-          <div className="grid gap-4">
-            <TasksBoard projectId={project.id} />
+          <div className="grid gap-6">
+            {/* View toggle tabs */}
+            <div className="flex justify-end">
+              <div className="flex border border-border bg-card rounded-lg p-1 text-xs font-semibold">
+                {(
+                  [
+                    { id: 'board', label: 'Kanban Board', icon: Kanban },
+                    { id: 'list', label: 'List View', icon: ListTodo },
+                    { id: 'calendar', label: 'Calendar', icon: Calendar },
+                    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+                  ] as const
+                ).map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTasksViewMode(tab.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md transition ${
+                      tasksViewMode === tab.id
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-foreground/60 hover:text-foreground hover:bg-muted/40'
+                    }`}
+                  >
+                    <tab.icon className="h-3.5 w-3.5" />
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Selected view mode */}
+            <div className="min-w-0">
+              {tasksViewMode === 'board' && <TasksBoard projectId={project.id} />}
+              {tasksViewMode === 'list' && <TasksListPage projectId={project.id} />}
+              {tasksViewMode === 'calendar' && <TasksCalendar projectId={project.id} />}
+              {tasksViewMode === 'dashboard' && <TasksDashboard projectId={project.id} />}
+            </div>
           </div>
         )}
 
@@ -1106,7 +1148,9 @@ export function ProjectDetailsPage() {
               <h3 className="font-bold text-sm">Project Time Logs</h3>
             </div>
 
-            <div className="grid gap-3 border-b border-border px-5 py-4 sm:grid-cols-2">
+            <div
+              className={`grid gap-3 border-b border-border px-5 py-4 ${isAdmin ? 'sm:grid-cols-2' : 'sm:grid-cols-1'}`}
+            >
               <div className="rounded border border-border bg-background p-3">
                 <span className="block text-[10px] font-bold uppercase text-foreground/45">
                   Approved Hours
@@ -1115,14 +1159,16 @@ export function ProjectDetailsPage() {
                   {approvedHours.toFixed(2)} hrs
                 </span>
               </div>
-              <div className="rounded border border-border bg-background p-3">
-                <span className="block text-[10px] font-bold uppercase text-foreground/45">
-                  Approved Billable Value
-                </span>
-                <span className="mt-1 block text-xl font-bold text-emerald-600">
-                  ${approvedBillableValue.toLocaleString()}
-                </span>
-              </div>
+              {isAdmin && (
+                <div className="rounded border border-border bg-background p-3">
+                  <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                    Approved Billable Value
+                  </span>
+                  <span className="mt-1 block text-xl font-bold text-emerald-600">
+                    ${approvedBillableValue.toLocaleString()}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
@@ -1132,7 +1178,7 @@ export function ProjectDetailsPage() {
                     <th className="px-5 py-3">Team Member</th>
                     <th className="px-5 py-3">Task</th>
                     <th className="px-5 py-3">Hours</th>
-                    <th className="px-5 py-3">Value</th>
+                    {isAdmin && <th className="px-5 py-3">Value</th>}
                     <th className="px-5 py-3">Status</th>
                     <th className="px-5 py-3">Date</th>
                   </tr>
@@ -1140,7 +1186,10 @@ export function ProjectDetailsPage() {
                 <tbody className="divide-y divide-border">
                   {timeLogs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-5 py-8 text-center text-foreground/45 italic">
+                      <td
+                        colSpan={isAdmin ? 7 : 6}
+                        className="px-5 py-8 text-center text-foreground/45 italic"
+                      >
                         No time entries logged for this project.
                       </td>
                     </tr>
@@ -1162,11 +1211,13 @@ export function ProjectDetailsPage() {
                           {log.task?.title || 'No task linked'}
                         </td>
                         <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
-                        <td className="px-5 py-3.5 font-bold text-emerald-600">
-                          {log.billable
-                            ? `$${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
-                            : '-'}
-                        </td>
+                        {isAdmin && (
+                          <td className="px-5 py-3.5 font-bold text-emerald-600">
+                            {log.billable
+                              ? `$${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
+                              : '-'}
+                          </td>
+                        )}
                         <td className="px-5 py-3.5">
                           <span
                             className={`px-2 py-0.5 rounded text-[10px] font-bold ${statusBadgeClass(log.status)}`}
@@ -1187,7 +1238,7 @@ export function ProjectDetailsPage() {
         )}
 
         {/* --- INVOICES TAB --- */}
-        {activeTab === 'invoices' && (
+        {activeTab === 'invoices' && isAdmin && (
           <Card className="p-0 overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">

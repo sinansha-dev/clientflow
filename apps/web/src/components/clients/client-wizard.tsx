@@ -70,7 +70,7 @@ export function ClientWizard({ onClose, onSuccess }: ClientWizardProps) {
       try {
         const response = await api.get('/users');
         // Filter users who can be account managers (ADMIN or DEVELOPER)
-        const staff = (response.data.data ?? []).filter(
+        const staff = (response.data.data?.users ?? []).filter(
           (u: AuthUser) => u.role === 'ADMIN' || u.role === 'DEVELOPER',
         );
         setManagers(staff);

@@ -149,7 +149,7 @@ export function ClientDetailsPage() {
     try {
       const payload = {
         companyName: editClientForm.companyName,
-        companyLogo: editClientForm.companyLogo,
+        companyLogo: editClientForm.companyLogo || null,
         industry: editClientForm.industry,
         website: editClientForm.website,
         email: editClientForm.email,
@@ -157,10 +157,10 @@ export function ClientDetailsPage() {
         assignedManagerId: editClientForm.assignedManagerId || null,
         billingAddress: editClientForm.billingAddress,
         shippingAddress: editClientForm.shippingAddress,
-        taxNumber: editClientForm.taxNumber,
+        taxNumber: editClientForm.taxNumber || null,
         currency: editClientForm.currency,
         timezone: editClientForm.timezone,
-        source: editClientForm.source,
+        source: editClientForm.source || null,
       };
       const response = await api.patch(`/clients/${id}`, payload);
       setClient(response.data.data);

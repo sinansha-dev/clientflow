@@ -21,11 +21,23 @@
   --success: 142 71% 45%;
   --warning: 45 93% 47%;
   --danger: 0 84% 60%;
-  --background: 220 20% 9%;
+  --background: 220 3% 16%; /* #252628 (Main background, matching screenshot) */
   --foreground: 210 40% 98%;
-  --muted: 215 17% 19%;
-  --card: 220 18% 12%;
-  --border: 216 16% 24%;
+  --muted: 220 4% 21%; /* #333538 (Muted elements / tabs) */
+  --card: 220 5% 11%; /* #1c1d1f (Card and sidebar bg, matching screenshot) */
+  --border: 220 4% 20%; /* #303133 (Subtle borders) */
+}
+
+/* Custom premium card shadow */
+.card-shadow {
+  box-shadow:
+    0 4px 16px -2px rgba(0, 0, 0, 0.08),
+    0 2px 6px -1px rgba(0, 0, 0, 0.04);
+}
+.dark .card-shadow {
+  box-shadow:
+    0 12px 36px -4px rgba(0, 0, 0, 0.65),
+    0 4px 12px -2px rgba(0, 0, 0, 0.45);
 }
 
 body {

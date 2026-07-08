@@ -8,7 +8,7 @@ import { TaskDetailsDrawer } from '../../components/tasks/task-details-drawer';
 import type { Task } from '@clientflow/types';
 import { CheckCircle, Clock, ListTodo, AlertCircle, Calendar, Zap } from 'lucide-react';
 
-export function TasksDashboard() {
+export function TasksDashboard({ projectId: scopedProjectId }: { projectId?: string } = {}) {
   const { user } = useAuthStore();
   const notify = useToastStore((state) => state.notify);
 
@@ -19,7 +19,8 @@ export function TasksDashboard() {
   const loadTasks = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/tasks');
+      const url = scopedProjectId ? `/tasks?projectId=${scopedProjectId}` : '/tasks';
+      const res = await api.get(url);
       setTasks(res.data.data ?? []);
     } catch (err) {
       notify({ type: 'error', title: 'Load Failed', message: errorMessage(err) });

@@ -1,388 +1,449 @@
-import { useState, useEffect } from 'react';
-import { Card } from '../components/ui/card';
+import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/auth-store';
+import { useToastStore } from '../stores/toast-store';
 import { api } from '../lib/api';
-import type { Client, Project } from '@clientflow/types';
+import { errorMessage } from '../lib/errors';
+import { CreateTaskModal } from '../components/tasks/create-task-modal';
+import { ProjectWizard } from '../components/projects/project-wizard';
+import type { Project, Task, ProjectTeam } from '@clientflow/types';
 import {
-  Building2,
-  UsersRound,
-  Archive,
-  CalendarRange,
-  FolderKanban,
+  Lock,
+  MoreHorizontal,
+  Plus,
   CheckCircle2,
-  AlertTriangle,
-  Clock,
-  CalendarDays,
-  Activity,
+  UsersRound,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
-  const [clients, setClients] = useState<Client[]>([]);
+  const notify = useToastStore((state) => state.notify);
+
   const [projects, setProjects] = useState<Project[]>([]);
-  const [teamMembers, setTeamMembers] = useState<any[]>([]);
-  const [meetings, setMeetings] = useState<any[]>([]);
-  const [hoursToday, setHoursToday] = useState(0);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Modal states
+  const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
+  const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+
+  // Tab state for My Tasks
+  const [taskTab, setTaskTab] = useState<'upcoming' | 'overdue' | 'completed'>('upcoming');
+
+  const fetchDashboardStats = useCallback(async () => {
+    try {
+      const [prjRes, taskRes] = await Promise.all([
+        api.get('/projects?limit=1000'),
+        api.get('/tasks'),
+      ]);
+      setProjects(prjRes.data.data?.items ?? []);
+      setTasks(taskRes.data.data ?? []);
+    } catch (err) {
+      console.error('Failed to load dashboard statistics:', err);
+      notify({
+        type: 'error',
+        title: 'Load Failed',
+        message: errorMessage(err, 'Failed to retrieve workspace data.'),
+      });
+    } finally {
+      setLoading(false);
+    }
+  }, [notify]);
+
   useEffect(() => {
-    async function fetchDashboardStats() {
-      try {
-        const [cliRes, prjRes] = await Promise.all([
-          api.get('/clients?limit=1000'),
-          api.get('/projects?limit=1000'),
-        ]);
-        setClients(cliRes.data.data?.items ?? []);
-        setProjects(prjRes.data.data?.items ?? []);
+    fetchDashboardStats();
+  }, [fetchDashboardStats]);
 
-        if (user && user.role !== 'CLIENT') {
-          try {
-            const [teamRes, meetRes, logRes] = await Promise.all([
-              api.get('/team?limit=1000'),
-              api.get('/meetings'),
-              api.get('/timelogs'),
-            ]);
-            setTeamMembers(teamRes.data.data?.items ?? []);
-            setMeetings(meetRes.data.data ?? []);
+  // Date Formatting
+  const formattedDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric',
+  });
 
-            const todayStr = new Date().toISOString().split('T')[0];
-            const logsToday = (logRes.data.data ?? []).filter((l: any) => {
-              return new Date(l.startTime).toISOString().split('T')[0] === todayStr;
-            });
-            const loggedToday = logsToday.reduce((acc: number, l: any) => acc + l.duration, 0);
-            setHoursToday(Math.round(loggedToday * 10) / 10);
-          } catch (e) {
-            console.error('Failed to load dashboard workforce stats:', e);
-          }
+  // Dynamic Greeting
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    const name = user?.firstName ? user.firstName.toUpperCase() : 'USER';
+    if (hour < 12) return `Good morning, ${name}`;
+    if (hour < 17) return `Good afternoon, ${name}`;
+    return `Good evening, ${name}`;
+  };
+
+  // Initials for avatar
+  const getInitials = () => {
+    const first = user?.firstName?.charAt(0) || '';
+    const last = user?.lastName?.charAt(0) || '';
+    return `${first}${last}`.toUpperCase() || 'CF';
+  };
+
+  // Calculations for Tasks Completed and Collaborators
+  const myTasks = tasks.filter((t) => t.assignees?.some((a) => a.id === user?.id));
+  const completedTasksCount = myTasks.filter((t) => t.status === 'COMPLETED').length;
+
+  const collaboratorIds = new Set<string>();
+  projects.forEach((p) => {
+    if (p.projectManagerId && p.projectManagerId !== user?.id) {
+      collaboratorIds.add(p.projectManagerId);
+    }
+    if (p.teamMembers) {
+      p.teamMembers.forEach((member: ProjectTeam) => {
+        if (!member) return;
+        const id = member.userId;
+        if (id && id !== user?.id) {
+          collaboratorIds.add(id);
         }
-      } catch (err) {
-        console.error('Failed to load dashboard CRM and project stats:', err);
-      } finally {
-        setLoading(false);
+      });
+    }
+  });
+  const collaboratorsCount = collaboratorIds.size;
+
+  // Task filtering based on selected tab
+  const getFilteredTasks = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (taskTab === 'completed') {
+      return myTasks.filter((t) => t.status === 'COMPLETED');
+    }
+
+    if (taskTab === 'overdue') {
+      return myTasks.filter((t) => {
+        if (t.status === 'COMPLETED' || !t.dueDate) return false;
+        return new Date(t.dueDate) < today;
+      });
+    }
+
+    // Upcoming
+    return myTasks.filter((t) => {
+      if (t.status === 'COMPLETED') return false;
+      if (!t.dueDate) return true;
+      return new Date(t.dueDate) >= today;
+    });
+  };
+
+  const filteredTasks = getFilteredTasks();
+  const canCreateTasks = user?.role === 'ADMIN';
+
+  // Tasks due soon text for projects
+  const getTasksDueSoon = (projId: string) => {
+    const projTasks = tasks.filter((t) => t.projectId === projId && t.status !== 'COMPLETED');
+    const soonCount = projTasks.length;
+    if (soonCount === 0) return 'No tasks remaining';
+    if (soonCount === 1) return '1 task due soon';
+    return `${soonCount} tasks due soon`;
+  };
+
+  // Task Completion Toggler
+  const toggleTaskCompletion = async (task: Task) => {
+    const isNowCompleted = task.status !== 'COMPLETED';
+    const newStatus = isNowCompleted ? 'COMPLETED' : 'TODO';
+
+    // Optimistic UI Update
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === task.id
+          ? {
+              ...t,
+              status: newStatus,
+              completedAt: isNowCompleted ? new Date().toISOString() : null,
+            }
+          : t,
+      ),
+    );
+
+    try {
+      await api.patch(`/tasks/${task.id}`, { status: newStatus });
+      notify({
+        type: 'success',
+        title: isNowCompleted ? 'Task completed' : 'Task marked incomplete',
+        message: `"${task.title}" updated.`,
+      });
+      // Fetch latest states in background
+      const taskRes = await api.get('/tasks');
+      setTasks(taskRes.data.data ?? []);
+    } catch (err) {
+      console.error('Failed to toggle task completion status:', err);
+      notify({
+        type: 'error',
+        title: 'Status Update Failed',
+        message: errorMessage(err, 'Could not sync task status.'),
+      });
+      // Rollback
+      fetchDashboardStats();
+    }
+  };
+
+  // Date Formatter helper for task row (e.g. "7 - 9 Jul" or "25 Jul")
+  const formatTaskDate = (
+    start: string | Date | null | undefined,
+    due: string | Date | null | undefined,
+  ) => {
+    if (!due) return '';
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    const dueD = new Date(due);
+    const dueDay = dueD.getDate();
+    const dueMonth = months[dueD.getMonth()];
+
+    if (start) {
+      const startD = new Date(start);
+      const startDay = startD.getDate();
+      const startMonth = months[startD.getMonth()];
+      if (startMonth === dueMonth) {
+        return `${startDay} - ${dueDay} ${dueMonth}`;
+      } else {
+        return `${startDay} ${startMonth} - ${dueDay} ${dueMonth}`;
       }
     }
-    fetchDashboardStats();
-  }, [user]);
+    return `${dueDay} ${dueMonth}`;
+  };
 
-  // CRM Calculations
-  const totalClients = clients.length;
-  const activeClients = clients.filter((c) => c.status === 'ACTIVE').length;
-
-  // Projects Calculations
-  const totalProjects = projects.length;
-  const activeProjects = projects.filter(
-    (p) => p.status !== 'COMPLETED' && p.status !== 'CANCELLED',
-  ).length;
-  const completedProjects = projects.filter((p) => p.status === 'COMPLETED').length;
-
-  // Computed Health stats
-  const delayedProjects = projects.filter((p) => p.healthStatus === 'DELAYED').length;
-
-  // Projects near deadline (less than 7 days left)
-  const now = new Date();
-  const nearDeadlineProjects = projects.filter((p) => {
-    if (p.status === 'COMPLETED' || p.status === 'CANCELLED') return false;
-    const deadline = new Date(p.deadline);
-    const diff = deadline.getTime() - now.getTime();
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24));
-    return days >= 0 && days <= 7;
-  }).length;
-
-  // Upcoming Milestones from all active projects
-  const upcomingMilestones: Array<{
-    prjName: string;
-    title: string;
-    dueDate: string;
-    status: string;
-  }> = [];
-  projects.forEach((p) => {
-    if (p.status !== 'COMPLETED' && p.milestones) {
-      p.milestones.forEach((m) => {
-        if (m.status !== 'COMPLETED') {
-          upcomingMilestones.push({
-            prjName: p.projectName,
-            title: m.title,
-            dueDate: m.dueDate.toString(),
-            status: m.status,
-          });
-        }
-      });
-    }
-  });
-
-  // Sort upcoming milestones by due date and take top 5
-  const sortedMilestones = upcomingMilestones
-    .sort((a, b) => new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime())
-    .slice(0, 5);
-
-  // Recent Activities
-  const recentActivities: Array<{ prjName: string; desc: string; time: string }> = [];
-  projects.forEach((p) => {
-    if (p.activities) {
-      p.activities.forEach((act) => {
-        recentActivities.push({
-          prjName: p.projectName,
-          desc: act.description,
-          time: act.createdAt.toString(),
-        });
-      });
-    }
-  });
-
-  // Sort recent activities by time (newest first) and take top 5
-  const sortedActivities = recentActivities
-    .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-    .slice(0, 5);
-
-  const metrics = [
-    { label: 'Active Projects', value: activeProjects, icon: FolderKanban, tone: 'text-primary' },
-    {
-      label: 'Near Deadline',
-      value: nearDeadlineProjects,
-      icon: CalendarDays,
-      tone: 'text-orange-500',
-    },
-    { label: 'Delayed Projects', value: delayedProjects, icon: AlertTriangle, tone: 'text-danger' },
-    {
-      label: 'Completed Projects',
-      value: completedProjects,
-      icon: CheckCircle2,
-      tone: 'text-emerald-600',
-    },
-  ];
+  if (loading) {
+    return (
+      <div className="-mx-4 -my-6 md:-mx-8 p-6 md:p-8 min-h-[calc(100vh-10rem)] bg-gradient-to-br from-[#192723] via-[#121817] to-[#0d0e0e] text-[#f5f6f6] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-sm font-medium text-zinc-400">Loading your workspace...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid gap-6">
-      {/* Title */}
-      <div>
-        <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
-        <p className="mt-2 text-sm text-foreground/65">
-          Welcome back, {user?.firstName}. Here is a summary of your workspace activities and client
-          pipeline.
-        </p>
-      </div>
-
-      {/* Projects Dashboard Metrics Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {metrics.map((metric) => (
-          <Card key={metric.label} className="flex items-center justify-between p-5">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-foreground/50">
-                {metric.label}
-              </p>
-              <p className={`mt-2 text-3xl font-bold ${metric.tone}`}>
-                {loading ? '...' : metric.value}
-              </p>
-            </div>
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-muted/40 text-foreground/60">
-              <metric.icon className="h-6 w-6" />
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      {/* Workforce Board widgets */}
-      {user?.role !== 'CLIENT' && (
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Card className="flex items-center gap-3.5 p-4.5">
-            <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600 font-bold shrink-0">
-              {teamMembers.filter((m) => m.availabilityStatus === 'Available').length}
-            </div>
-            <div>
-              <span className="text-[9px] font-bold text-foreground/50 uppercase tracking-wider block">
-                Available Online
-              </span>
-              <span className="text-xs font-bold text-foreground block">
-                {teamMembers.filter((m) => m.availabilityStatus !== 'Offline').length} Online &bull;{' '}
-                {teamMembers.length} Total
-              </span>
-            </div>
-          </Card>
-
-          <Card className="flex items-center gap-3.5 p-4.5">
-            <div className="h-10 w-10 rounded-full bg-purple-500/10 flex items-center justify-center text-purple-600 shrink-0">
-              <CalendarDays className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-[9px] font-bold text-foreground/50 uppercase tracking-wider block">
-                Today's Meetings
-              </span>
-              <span className="text-xs font-bold text-foreground block">
-                {meetings.length} Scheduled
-              </span>
-            </div>
-          </Card>
-
-          <Card className="flex items-center gap-3.5 p-4.5">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary shrink-0">
-              <Clock className="h-5 w-5" />
-            </div>
-            <div>
-              <span className="text-[9px] font-bold text-foreground/50 uppercase tracking-wider block">
-                Hours Tracked Today
-              </span>
-              <span className="text-xs font-bold text-foreground block">
-                {hoursToday} hrs logged
-              </span>
-            </div>
-          </Card>
-        </div>
-      )}
-
-      {/* Main Layout Blocks */}
-      <div className="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
-        <div className="grid gap-6">
-          {/* Top Projects */}
-          <Card>
-            <h2 className="text-lg font-bold text-foreground">Active Projects</h2>
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/75">
-                    <th className="px-4 py-2.5">Project</th>
-                    <th className="px-4 py-2.5">Client</th>
-                    <th className="px-4 py-2.5">Progress</th>
-                    <th className="px-4 py-2.5">Health</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {loading ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-4 text-center text-foreground/55">
-                        Loading...
-                      </td>
-                    </tr>
-                  ) : projects.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-4 text-center text-foreground/55">
-                        No projects registered yet.
-                      </td>
-                    </tr>
-                  ) : (
-                    projects.slice(0, 5).map((p) => (
-                      <tr key={p.id}>
-                        <td className="px-4 py-3">
-                          <div>
-                            <span className="font-semibold block">{p.projectName}</span>
-                            <span className="text-[10px] text-foreground/50 font-mono">
-                              {p.projectCode}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-foreground/80 font-medium">
-                          {p.client?.companyName}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="h-2 w-24 rounded-full bg-border overflow-hidden">
-                              <div
-                                className="h-full bg-primary"
-                                style={{ width: `${p.progress}%` }}
-                              />
-                            </div>
-                            <span className="text-xs font-semibold">{p.progress}%</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                              p.healthStatus === 'HEALTHY'
-                                ? 'bg-emerald-500/10 text-emerald-600'
-                                : p.healthStatus === 'AT_RISK'
-                                  ? 'bg-orange-500/10 text-orange-600'
-                                  : 'bg-danger/10 text-danger'
-                            }`}
-                          >
-                            {p.healthStatus}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </Card>
-
-          {/* CRM Stats Card */}
-          <Card className="flex items-center justify-between p-5">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600">
-                <Building2 className="h-6 w-6" />
-              </div>
-              <div>
-                <span className="block text-xs font-semibold uppercase tracking-wider text-foreground/50">
-                  Total Managed Clients
-                </span>
-                <span className="text-2xl font-bold text-foreground">
-                  {loading ? '...' : totalClients} ({activeClients} Active)
-                </span>
-              </div>
-            </div>
-          </Card>
+    <div className="-mx-4 -my-6 md:-mx-8 p-6 md:p-8 min-h-[calc(100vh-10rem)] bg-gradient-to-br from-[#192723] via-[#121817] to-[#0d0e0e] text-[#f5f6f6] font-sans antialiased">
+      {/* Header section */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+        <div>
+          <span className="text-sm font-medium text-zinc-400">{formattedDate}</span>
+          <h1 className="text-3xl font-semibold tracking-tight text-white mt-1">{getGreeting()}</h1>
         </div>
 
-        {/* Sidebar: Upcoming Milestones & Activities */}
-        <div className="grid gap-6">
-          {/* Upcoming Milestones */}
-          <Card className="flex flex-col gap-4">
-            <h2 className="text-lg font-bold text-foreground">Upcoming Milestones</h2>
-            <div className="grid gap-3 mt-2">
-              {loading ? (
-                <div className="text-sm text-foreground/50">Loading milestones...</div>
-              ) : sortedMilestones.length === 0 ? (
-                <div className="text-xs text-foreground/50 italic">No upcoming milestones.</div>
-              ) : (
-                sortedMilestones.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className="flex flex-col gap-1 bg-muted/20 p-2.5 rounded-lg border border-border/50 text-xs"
-                  >
-                    <div className="flex justify-between font-semibold">
-                      <span>{m.title}</span>
-                      <span className="text-primary text-[10px] uppercase font-mono">
-                        {m.status}
-                      </span>
-                    </div>
-                    <span className="text-[10px] text-foreground/50">{m.prjName}</span>
-                    <span className="text-[10px] text-foreground/60 mt-1 flex items-center gap-1 font-medium">
-                      <Clock className="h-3 w-3" /> Due: {new Date(m.dueDate).toLocaleDateString()}
+        {/* Action pills */}
+        <div className="flex flex-wrap items-center gap-2 text-zinc-300">
+          <button className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition">
+            <span>My week</span>
+            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+          </button>
+
+          <div className="flex items-center gap-4 px-4 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/5 text-zinc-300">
+            <span className="flex items-center gap-1.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+              {completedTasksCount} tasks completed
+            </span>
+            <div className="h-3.5 w-[1px] bg-white/10" />
+            <span className="flex items-center gap-1.5">
+              <UsersRound className="h-4 w-4 text-blue-400" />
+              {collaboratorsCount} collaborators
+            </span>
+          </div>
+
+          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition">
+            {/* Colorful custom Grid Icon */}
+            <div className="grid grid-cols-2 gap-0.5 w-3 h-3">
+              <div className="bg-[#f06595] rounded-xs" />
+              <div className="bg-[#4dabf7] rounded-xs" />
+              <div className="bg-[#37b24d] rounded-xs" />
+              <div className="bg-[#f59f00] rounded-xs" />
+            </div>
+            <span>Customize</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Widgets Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* Left Column: My Tasks */}
+        <div className="bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden p-6 flex flex-col min-h-[480px]">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              {/* Pink/Pastel avatar with initials */}
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ec8c9f] text-white text-xs font-bold font-mono shadow-inner shadow-black/10 select-none">
+                {getInitials()}
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-lg text-white">My tasks</span>
+                <Lock className="h-4 w-4 text-zinc-400" />
+              </div>
+            </div>
+            <button className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition">
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-[#323438] gap-4 mb-4 text-sm">
+            {(['upcoming', 'overdue', 'completed'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setTaskTab(tab)}
+                className={`pb-2.5 font-medium transition capitalize relative ${
+                  taskTab === tab ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                {tab}
+                {taskTab === tab && (
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Create Task Button */}
+          {canCreateTasks && (
+            <button
+              onClick={() => setIsCreateTaskOpen(true)}
+              className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm mb-4 transition w-fit py-1.5 px-2.5 hover:bg-white/5 border border-zinc-700/50 rounded-lg -ml-1"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create task</span>
+            </button>
+          )}
+
+          {/* Task List */}
+          <div className="flex-1 flex flex-col divide-y divide-[#323438]/50">
+            {filteredTasks.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 py-12 text-sm italic">
+                No tasks in this section
+              </div>
+            ) : (
+              filteredTasks.map((task) => (
+                <div
+                  key={task.id}
+                  className="py-3 flex items-center justify-between gap-3 text-sm group"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* Circle Checkbox Button */}
+                    <button
+                      onClick={() => toggleTaskCompletion(task)}
+                      className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all transform hover:scale-105 duration-100 ${
+                        task.status === 'COMPLETED'
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                          : 'border-zinc-500 hover:border-zinc-300 text-transparent hover:text-zinc-400'
+                      }`}
+                    >
+                      <Check className="h-3 w-3" />
+                    </button>
+
+                    {/* Task Title */}
+                    <span
+                      onClick={() => navigate('/tasks')}
+                      className={`truncate cursor-pointer hover:underline ${
+                        task.status === 'COMPLETED' ? 'line-through text-zinc-500' : 'text-zinc-200'
+                      }`}
+                    >
+                      {task.title}
                     </span>
                   </div>
-                ))
-              )}
-            </div>
-          </Card>
 
-          {/* Recent Activities */}
-          <Card className="flex flex-col gap-4">
-            <h2 className="text-lg font-bold text-foreground flex items-center gap-1.5">
-              <Activity className="h-5 w-5 text-primary" /> Recent Project Activity
-            </h2>
-            <div className="relative border-l border-border pl-4 ml-2 mt-2 flex flex-col gap-4 text-xs">
-              {loading ? (
-                <div className="text-sm text-foreground/50">Loading activities...</div>
-              ) : sortedActivities.length === 0 ? (
-                <div className="text-foreground/50 italic pl-1">No activities logged yet.</div>
-              ) : (
-                sortedActivities.map((act, idx) => (
-                  <div key={idx} className="relative">
-                    <div className="absolute -left-[21px] top-1 bg-background border border-primary h-2 w-2 rounded-full" />
-                    <div>
-                      <span className="block font-semibold text-foreground/80 leading-normal">
-                        {act.desc}
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Project badge */}
+                    {task.project && (
+                      <span className="bg-[#4dabf7]/10 text-[#4dabf7] border border-[#4dabf7]/20 px-2 py-0.5 text-[10px] rounded-md font-medium max-w-[100px] truncate">
+                        {task.project.projectName}
                       </span>
-                      <span className="text-[10px] text-foreground/50 mt-0.5 block">
-                        {act.prjName} &bull; {new Date(act.time).toLocaleDateString()}
+                    )}
+
+                    {/* Due Date */}
+                    {task.dueDate && (
+                      <span className="text-xs text-zinc-400 font-medium">
+                        {formatTaskDate(task.startDate, task.dueDate)}
                       </span>
-                    </div>
+                    )}
                   </div>
-                ))
-              )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Projects */}
+        <div className="bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden p-6 flex flex-col min-h-[480px]">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-lg text-white">Projects</span>
+              <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 font-medium px-2 py-1 bg-white/5 rounded-md transition">
+                <span>Recents</span>
+                <ChevronDown className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </Card>
+            <button className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition">
+              <MoreHorizontal className="h-5 w-5" />
+            </button>
+          </div>
+
+          {/* Projects Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Create Project Card */}
+            <button
+              onClick={() => setIsCreateProjectOpen(true)}
+              className="flex flex-col items-center justify-center p-6 bg-transparent hover:bg-white/5 border border-dashed border-[#323438] hover:border-zinc-500 rounded-xl min-h-[140px] text-zinc-400 hover:text-zinc-200 transition group"
+            >
+              <div className="h-10 w-10 flex items-center justify-center rounded-full border border-dashed border-[#323438] group-hover:border-zinc-500 mb-3 transition">
+                <Plus className="h-5 w-5" />
+              </div>
+              <span className="text-xs font-semibold">Create project</span>
+            </button>
+
+            {/* Existing Projects */}
+            {projects.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => navigate(`/projects/${p.id}`)}
+                className="flex items-center gap-4 p-5 bg-white/[0.02] hover:bg-white/[0.06] border border-[#323438] rounded-xl cursor-pointer transition min-h-[140px]"
+              >
+                {/* Blue icon with concentric circles */}
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white shadow-md shadow-blue-500/10">
+                  <div className="h-6 w-6 rounded-full border-[2.5px] border-white flex items-center justify-center">
+                    <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <h4 className="font-semibold text-white truncate text-sm" title={p.projectName}>
+                    {p.projectName}
+                  </h4>
+                  <p className="text-xs text-zinc-400 mt-1 font-medium">{getTasksDueSoon(p.id)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
+
+      {/* Modals integration */}
+      {canCreateTasks && (
+        <CreateTaskModal
+          isOpen={isCreateTaskOpen}
+          onClose={() => setIsCreateTaskOpen(false)}
+          onSuccess={fetchDashboardStats}
+          projects={projects}
+        />
+      )}
+
+      {isCreateProjectOpen && (
+        <ProjectWizard
+          onClose={() => setIsCreateProjectOpen(false)}
+          onSuccess={fetchDashboardStats}
+        />
+      )}
     </div>
   );
 }

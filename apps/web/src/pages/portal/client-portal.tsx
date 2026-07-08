@@ -129,7 +129,9 @@ export function ClientPortalPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [projects, setProjects] = useState<PortalProject[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useState(
+    () => localStorage.getItem('client-portal-project-id') || '',
+  );
   const [project, setProject] = useState<PortalProject | null>(null);
   const [files, setFiles] = useState<PortalFile[]>([]);
   const [tab, setTab] = useState<Tab>('overview');
@@ -147,7 +149,12 @@ export function ClientPortalPage() {
     const loadedProjects = projectsRes.data.data.projects as PortalProject[];
     setDashboard(loadedDashboard);
     setProjects(loadedProjects);
-    if (!selectedProjectId && loadedProjects[0]) setSelectedProjectId(loadedProjects[0].id);
+    const initialPrjId = localStorage.getItem('client-portal-project-id');
+    if (initialPrjId && loadedProjects.some((p) => p.id === initialPrjId)) {
+      setSelectedProjectId(initialPrjId);
+    } else if (loadedProjects[0]) {
+      setSelectedProjectId(loadedProjects[0].id);
+    }
   }
 
   async function loadProject(projectId: string) {
@@ -170,6 +177,7 @@ export function ClientPortalPage() {
 
   useEffect(() => {
     if (!selectedProjectId) return;
+    localStorage.setItem('client-portal-project-id', selectedProjectId);
     loadProject(selectedProjectId).catch((err) =>
       notify({ type: 'error', title: 'Project load failed', message: errorMessage(err) }),
     );

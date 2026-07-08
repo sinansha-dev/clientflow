@@ -12,7 +12,7 @@ export function TasksLayoutPage() {
   const [mode, setMode] = useState<TasksViewMode>('board');
 
   return (
-    <div className="grid gap-6 h-full">
+    <div className="grid gap-6 h-full w-full min-w-0 overflow-hidden">
       {/* Tab Navigation header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
@@ -49,7 +49,7 @@ export function TasksLayoutPage() {
       </div>
 
       {/* Mode Views */}
-      <div className="flex-1">
+      <div className="flex-1 min-w-0 overflow-hidden">
         {mode === 'board' && <TasksBoard />}
         {mode === 'list' && <TasksListPage />}
         {mode === 'calendar' && <TasksCalendar />}

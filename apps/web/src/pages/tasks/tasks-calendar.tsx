@@ -8,11 +8,11 @@ import { TaskDetailsDrawer } from '../../components/tasks/task-details-drawer';
 import type { Task, Project } from '@clientflow/types';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 
-export function TasksCalendar() {
+export function TasksCalendar({ projectId: scopedProjectId }: { projectId?: string } = {}) {
   const notify = useToastStore((state) => state.notify);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState('ALL');
+  const [projectId, setProjectId] = useState(scopedProjectId || 'ALL');
   const [loading, setLoading] = useState(true);
 
   // Calendar dates
@@ -94,20 +94,22 @@ export function TasksCalendar() {
           </div>
         </div>
 
-        <div className="grid gap-1 min-w-[200px] text-xs">
-          <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            className="h-9 rounded border border-border bg-background px-3 font-semibold"
-          >
-            <option value="ALL">All Projects</option>
-            {projects.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.projectName}
-              </option>
-            ))}
-          </select>
-        </div>
+        {!scopedProjectId && (
+          <div className="grid gap-1 min-w-[200px] text-xs">
+            <select
+              value={projectId}
+              onChange={(e) => setProjectId(e.target.value)}
+              className="h-9 rounded border border-border bg-background px-3 font-semibold"
+            >
+              <option value="ALL">All Projects</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.projectName}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </Card>
 
       {/* Calendar Grid */}

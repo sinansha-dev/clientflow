@@ -195,10 +195,23 @@ export const clientRepository = {
   },
 
   async softDelete(id: string) {
-    return prisma.client.update({
+    const deletedClient = await prisma.client.update({
       where: { id },
       data: { deletedAt: new Date() },
     });
+
+    // Cascade soft-delete to client's projects
+    const projects = await prisma.project.findMany({
+      where: { clientId: id, deletedAt: null },
+      select: { id: true },
+    });
+
+    const { projectRepository } = require('./project.repository');
+    for (const project of projects) {
+      await projectRepository.softDelete(project.id);
+    }
+
+    return deletedClient;
   },
 
   async checkDuplicateName(companyName: string, exceptId?: string) {

@@ -73,10 +73,16 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
       setTitleInput(t.title);
       setDescInput(t.description ?? '');
 
-      // Load project team members
-      const prjRes = await api.get(`/projects/${t.projectId}`);
-      const prj = prjRes.data.data;
-      setProjectTeam(prj.teamMembers?.map((tm: any) => tm.user) ?? []);
+      // Load project team members (isolated so it doesn't crash the drawer if the project is deleted)
+      try {
+        if (t.projectId) {
+          const prjRes = await api.get(`/projects/${t.projectId}`);
+          const prj = prjRes.data.data;
+          setProjectTeam(prj?.teamMembers?.map((tm: any) => tm.user) ?? []);
+        }
+      } catch (err) {
+        console.error('Failed to load project details or team members:', err);
+      }
 
       // Load all labels
       const labelsRes = await api.get('/labels');
@@ -106,6 +112,26 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
   const canModifyConfig = user?.role === 'ADMIN' || (isDeveloper && isAssigned);
 
   // --- Task Detail Mutators ---
+  const handleDeleteTask = async () => {
+    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    try {
+      await api.delete(`/tasks/${taskId}`);
+      notify({
+        type: 'success',
+        title: 'Task Deleted',
+        message: 'Task was deleted successfully',
+      });
+      onUpdate();
+      onClose();
+    } catch (err) {
+      notify({
+        type: 'error',
+        title: 'Delete Failed',
+        message: errorMessage(err, 'Failed to delete task'),
+      });
+    }
+  };
+
   const updateTaskField = async (
     fields: Partial<Task> & { assigneeIds?: string[]; labelIds?: string[] },
   ) => {
@@ -293,16 +319,28 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
         <div className="flex items-center gap-2">
           <CheckSquare className="h-5 w-5 text-primary" />
           <span className="text-xs font-mono font-semibold text-foreground/50">
-            Task details &bull; {task.project?.projectCode}
+            Task details &bull; {task.project?.projectCode || 'No Project'}
           </span>
         </div>
-        <button
-          onClick={onClose}
-          className="rounded-md p-1.5 text-foreground/50 hover:bg-muted hover:text-foreground"
-          aria-label="Close details"
-        >
-          <X className="h-5 w-5" />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {user?.role === 'ADMIN' && (
+            <button
+              onClick={handleDeleteTask}
+              className="rounded-md p-1.5 text-foreground/50 hover:bg-danger/10 hover:text-danger"
+              aria-label="Delete task"
+              title="Delete task"
+            >
+              <Trash2 className="h-4.5 w-4.5" />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="rounded-md p-1.5 text-foreground/50 hover:bg-muted hover:text-foreground"
+            aria-label="Close details"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
       </header>
 
       {/* Main Drawer Scroll Body */}
@@ -341,12 +379,9 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
               className="h-8 w-full rounded border border-border bg-background px-2"
               disabled={!canModifyConfig}
             >
-              <option value="BACKLOG">Backlog</option>
               <option value="TODO">To Do</option>
               <option value="IN_PROGRESS">In Progress</option>
               <option value="REVIEW">Review</option>
-              <option value="TESTING">Testing</option>
-              <option value="BLOCKED">Blocked</option>
               <option value="COMPLETED">Completed</option>
             </select>
           </div>

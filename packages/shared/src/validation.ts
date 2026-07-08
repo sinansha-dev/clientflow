@@ -68,12 +68,12 @@ export const clientContactSchema = z.object({
 
 export const createClientSchema = z.object({
   companyName: z.string().trim().min(1, 'Company name is required').max(100),
-  companyLogo: z.string().url('Invalid URL format').optional().or(z.literal('')),
+  companyLogo: z.string().url('Invalid URL format').optional().nullable().or(z.literal('')),
   industry: z.string().trim().min(1, 'Industry is required').max(100),
   website: z.string().trim().url('Invalid website URL').min(1, 'Website is required'),
   email: emailSchema,
   phone: z.string().trim().min(1, 'Phone is required'),
-  taxNumber: z.string().trim().optional().or(z.literal('')),
+  taxNumber: z.string().trim().optional().nullable().or(z.literal('')),
   billingAddress: z.string().trim().min(1, 'Billing address is required'),
   shippingAddress: z.string().trim().min(1, 'Shipping address is required'),
   country: z.string().trim().min(1, 'Country is required'),
@@ -83,7 +83,7 @@ export const createClientSchema = z.object({
   currency: z.string().trim().default('USD'),
   timezone: z.string().trim().default('UTC'),
   status: z.string().trim().default('ACTIVE'),
-  source: z.string().trim().optional().or(z.literal('')),
+  source: z.string().trim().optional().nullable().or(z.literal('')),
   assignedManagerId: z.string().uuid().optional().nullable().or(z.literal('')),
   // Primary contact fields (for Step 3 of the creation wizard)
   primaryContact: clientContactSchema.omit({ primaryContact: true }).optional(),
@@ -200,9 +200,7 @@ export const createTaskBaseSchema = z.object({
   parentTaskId: uuidSchema.optional().nullable(),
   title: z.string().trim().min(1, 'Task title is required').max(150),
   description: z.string().trim().optional().or(z.literal('')),
-  status: z
-    .enum(['BACKLOG', 'TODO', 'IN_PROGRESS', 'REVIEW', 'TESTING', 'BLOCKED', 'COMPLETED'])
-    .default('TODO'),
+  status: z.enum(['TODO', 'IN_PROGRESS', 'REVIEW', 'COMPLETED']).default('TODO'),
   priority: z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']).default('MEDIUM'),
   estimatedHours: z.coerce.number().nonnegative('Estimated hours must be non-negative').default(0),
   actualHours: z.coerce.number().nonnegative('Actual hours must be non-negative').default(0),

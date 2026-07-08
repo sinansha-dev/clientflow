@@ -56,7 +56,7 @@ export function ClientsListPage() {
     async function loadFilterOptions() {
       try {
         const mgrRes = await api.get('/users');
-        setManagers((mgrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+        setManagers((mgrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
 
         // Load clients without limit to extract unique countries and industries
         const allRes = await api.get('/clients?limit=1000');

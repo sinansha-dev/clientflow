@@ -21,7 +21,7 @@ import {
   Tag,
 } from 'lucide-react';
 
-export function TasksListPage() {
+export function TasksListPage({ projectId: scopedProjectId }: { projectId?: string } = {}) {
   const { user } = useAuthStore();
   const notify = useToastStore((state) => state.notify);
 
@@ -33,7 +33,7 @@ export function TasksListPage() {
 
   // Filters state
   const [search, setSearch] = useState('');
-  const [projectId, setProjectId] = useState('ALL');
+  const [projectId, setProjectId] = useState(scopedProjectId || 'ALL');
   const [assigneeId, setAssigneeId] = useState('ALL');
   const [priority, setPriority] = useState('ALL');
   const [status, setStatus] = useState('ALL');
@@ -69,7 +69,9 @@ export function TasksListPage() {
       setTeam((usrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
       setLabels(lblRes.data.data ?? []);
 
-      if (prjs.length > 0) {
+      if (scopedProjectId) {
+        setNewForm((f) => ({ ...f, projectId: scopedProjectId }));
+      } else if (prjs.length > 0) {
         setNewForm((f) => ({ ...f, projectId: prjs[0].id }));
       }
     } catch (err) {
@@ -177,21 +179,23 @@ export function TasksListPage() {
 
         {/* Multi-value Dropdowns */}
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-5 border-t border-border pt-4 text-xs">
-          <div className="grid gap-1">
-            <label className="font-semibold text-foreground/50">Project</label>
-            <select
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              className="h-9 rounded border border-border bg-background px-2"
-            >
-              <option value="ALL">All Projects</option>
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.projectName}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!scopedProjectId && (
+            <div className="grid gap-1">
+              <label className="font-semibold text-foreground/50">Project</label>
+              <select
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                className="h-9 rounded border border-border bg-background px-2"
+              >
+                <option value="ALL">All Projects</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.projectName}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="grid gap-1">
             <label className="font-semibold text-foreground/50">Status</label>
@@ -201,12 +205,9 @@ export function TasksListPage() {
               className="h-9 rounded border border-border bg-background px-2"
             >
               <option value="ALL">All Statuses</option>
-              <option value="BACKLOG">Backlog</option>
               <option value="TODO">To Do</option>
               <option value="IN_PROGRESS">In Progress</option>
               <option value="REVIEW">Review</option>
-              <option value="TESTING">Testing</option>
-              <option value="BLOCKED">Blocked</option>
               <option value="COMPLETED">Completed</option>
             </select>
           </div>
@@ -301,7 +302,6 @@ export function TasksListPage() {
                 onChange={(e) => setNewForm({ ...newForm, status: e.target.value })}
                 className="h-10 rounded border border-border bg-background px-3"
               >
-                <option value="BACKLOG">Backlog</option>
                 <option value="TODO">To Do</option>
                 <option value="IN_PROGRESS">In Progress</option>
               </select>
