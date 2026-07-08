@@ -15,8 +15,61 @@ import {
   UsersRound,
   ChevronDown,
   Check,
+  Palette,
 } from 'lucide-react';
 
+type DashboardAccent = 'emerald' | 'blue' | 'rose' | 'amber';
+type DashboardDensity = 'comfortable' | 'compact';
+
+const accentStyles: Record<
+  DashboardAccent,
+  {
+    label: string;
+    swatch: string;
+    text: string;
+    bg: string;
+    border: string;
+    solid: string;
+    shadow: string;
+  }
+> = {
+  emerald: {
+    label: 'Emerald',
+    swatch: 'bg-emerald-400',
+    text: 'text-emerald-400',
+    bg: 'bg-emerald-400/10',
+    border: 'border-emerald-400/25',
+    solid: 'bg-emerald-500',
+    shadow: 'shadow-emerald-500/10',
+  },
+  blue: {
+    label: 'Blue',
+    swatch: 'bg-[#4dabf7]',
+    text: 'text-[#4dabf7]',
+    bg: 'bg-[#4dabf7]/10',
+    border: 'border-[#4dabf7]/25',
+    solid: 'bg-blue-500',
+    shadow: 'shadow-blue-500/10',
+  },
+  rose: {
+    label: 'Rose',
+    swatch: 'bg-[#ec8c9f]',
+    text: 'text-[#ec8c9f]',
+    bg: 'bg-[#ec8c9f]/10',
+    border: 'border-[#ec8c9f]/25',
+    solid: 'bg-[#ec8c9f]',
+    shadow: 'shadow-[#ec8c9f]/10',
+  },
+  amber: {
+    label: 'Amber',
+    swatch: 'bg-[#f59f00]',
+    text: 'text-[#f59f00]',
+    bg: 'bg-[#f59f00]/10',
+    border: 'border-[#f59f00]/25',
+    solid: 'bg-[#f59f00]',
+    shadow: 'shadow-[#f59f00]/10',
+  },
+};
 export function DashboardPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -29,6 +82,15 @@ export function DashboardPage() {
   // Modal states
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
+  const [isCustomizeOpen, setIsCustomizeOpen] = useState(false);
+  const [dashboardAccent, setDashboardAccent] = useState<DashboardAccent>(() => {
+    const stored = localStorage.getItem('dashboard-accent') as DashboardAccent | null;
+    return stored && stored in accentStyles ? stored : 'blue';
+  });
+  const [dashboardDensity, setDashboardDensity] = useState<DashboardDensity>(() => {
+    const stored = localStorage.getItem('dashboard-density') as DashboardDensity | null;
+    return stored === 'compact' ? stored : 'comfortable';
+  });
 
   // Tab state for My Tasks
   const [taskTab, setTaskTab] = useState<'upcoming' | 'overdue' | 'completed'>('upcoming');
@@ -56,6 +118,14 @@ export function DashboardPage() {
   useEffect(() => {
     fetchDashboardStats();
   }, [fetchDashboardStats]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard-accent', dashboardAccent);
+  }, [dashboardAccent]);
+
+  useEffect(() => {
+    localStorage.setItem('dashboard-density', dashboardDensity);
+  }, [dashboardDensity]);
 
   // Date Formatting
   const formattedDate = new Date().toLocaleDateString('en-US', {
@@ -127,6 +197,10 @@ export function DashboardPage() {
 
   const filteredTasks = getFilteredTasks();
   const canCreateTasks = user?.role === 'ADMIN';
+  const accent = accentStyles[dashboardAccent];
+  const panelPadding = dashboardDensity === 'compact' ? 'p-4' : 'p-6';
+  const panelMinHeight = dashboardDensity === 'compact' ? 'min-h-[380px]' : 'min-h-[480px]';
+  const projectCardMinHeight = dashboardDensity === 'compact' ? 'min-h-[112px]' : 'min-h-[140px]';
 
   // Tasks due soon text for projects
   const getTasksDueSoon = (projId: string) => {
@@ -253,28 +327,84 @@ export function DashboardPage() {
             </span>
           </div>
 
-          <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition">
-            {/* Colorful custom Grid Icon */}
-            <div className="grid grid-cols-2 gap-0.5 w-3 h-3">
-              <div className="bg-[#f06595] rounded-xs" />
-              <div className="bg-[#4dabf7] rounded-xs" />
-              <div className="bg-[#37b24d] rounded-xs" />
-              <div className="bg-[#f59f00] rounded-xs" />
-            </div>
-            <span>Customize</span>
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsCustomizeOpen((open) => !open)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition"
+            >
+              <Palette className="h-3.5 w-3.5" />
+              <span>Customize</span>
+            </button>
+
+            {isCustomizeOpen && (
+              <div className="absolute right-0 top-full z-20 mt-2 w-72 rounded-xl border border-white/10 bg-[#25272a] p-4 text-left shadow-2xl shadow-black/40">
+                <div className="mb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Accent color
+                  </p>
+                  <div className="mt-2 grid grid-cols-4 gap-2">
+                    {(Object.keys(accentStyles) as DashboardAccent[]).map((key) => {
+                      const item = accentStyles[key];
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setDashboardAccent(key)}
+                          className={`flex h-10 items-center justify-center rounded-lg border transition ${
+                            dashboardAccent === key
+                              ? 'border-white/40 bg-white/10'
+                              : 'border-white/10 bg-white/[0.03] hover:bg-white/10'
+                          }`}
+                          title={item.label}
+                        >
+                          <span className={`h-4 w-4 rounded-full ${item.swatch}`} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">
+                    Density
+                  </p>
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    {(['comfortable', 'compact'] as DashboardDensity[]).map((density) => (
+                      <button
+                        key={density}
+                        type="button"
+                        onClick={() => setDashboardDensity(density)}
+                        className={`rounded-lg border px-3 py-2 text-xs font-semibold capitalize transition ${
+                          dashboardDensity === density
+                            ? `${accent.bg} ${accent.border} ${accent.text}`
+                            : 'border-white/10 bg-white/[0.03] text-zinc-400 hover:bg-white/10'
+                        }`}
+                      >
+                        {density}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Main Widgets Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         {/* Left Column: My Tasks */}
-        <div className="bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden p-6 flex flex-col min-h-[480px]">
+        <div
+          className={`bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden flex flex-col ${panelPadding} ${panelMinHeight}`}
+        >
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               {/* Pink/Pastel avatar with initials */}
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ec8c9f] text-white text-xs font-bold font-mono shadow-inner shadow-black/10 select-none">
+              <div
+                className={`flex h-8 w-8 items-center justify-center rounded-full ${accent.solid} text-white text-xs font-bold font-mono shadow-inner shadow-black/10 select-none`}
+              >
                 {getInitials()}
               </div>
               <div className="flex items-center gap-1.5">
@@ -334,7 +464,7 @@ export function DashboardPage() {
                       onClick={() => toggleTaskCompletion(task)}
                       className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all transform hover:scale-105 duration-100 ${
                         task.status === 'COMPLETED'
-                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400'
+                          ? `${accent.border} ${accent.bg} ${accent.text}`
                           : 'border-zinc-500 hover:border-zinc-300 text-transparent hover:text-zinc-400'
                       }`}
                     >
@@ -355,7 +485,9 @@ export function DashboardPage() {
                   <div className="flex items-center gap-3 shrink-0">
                     {/* Project badge */}
                     {task.project && (
-                      <span className="bg-[#4dabf7]/10 text-[#4dabf7] border border-[#4dabf7]/20 px-2 py-0.5 text-[10px] rounded-md font-medium max-w-[100px] truncate">
+                      <span
+                        className={`${accent.bg} ${accent.text} border ${accent.border} px-2 py-0.5 text-[10px] rounded-md font-medium max-w-[100px] truncate`}
+                      >
                         {task.project.projectName}
                       </span>
                     )}
@@ -374,7 +506,9 @@ export function DashboardPage() {
         </div>
 
         {/* Right Column: Projects */}
-        <div className="bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden p-6 flex flex-col min-h-[480px]">
+        <div
+          className={`bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden flex flex-col ${panelPadding} ${panelMinHeight}`}
+        >
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -394,7 +528,7 @@ export function DashboardPage() {
             {/* Create Project Card */}
             <button
               onClick={() => setIsCreateProjectOpen(true)}
-              className="flex flex-col items-center justify-center p-6 bg-transparent hover:bg-white/5 border border-dashed border-[#323438] hover:border-zinc-500 rounded-xl min-h-[140px] text-zinc-400 hover:text-zinc-200 transition group"
+              className={`flex flex-col items-center justify-center ${dashboardDensity === 'compact' ? 'p-4' : 'p-6'} bg-transparent hover:bg-white/5 border border-dashed border-[#323438] hover:border-zinc-500 rounded-xl ${projectCardMinHeight} text-zinc-400 hover:text-zinc-200 transition group`}
             >
               <div className="h-10 w-10 flex items-center justify-center rounded-full border border-dashed border-[#323438] group-hover:border-zinc-500 mb-3 transition">
                 <Plus className="h-5 w-5" />
@@ -407,10 +541,12 @@ export function DashboardPage() {
               <div
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="flex items-center gap-4 p-5 bg-white/[0.02] hover:bg-white/[0.06] border border-[#323438] rounded-xl cursor-pointer transition min-h-[140px]"
+                className={`flex items-center gap-4 ${dashboardDensity === 'compact' ? 'p-4' : 'p-5'} bg-white/[0.02] hover:bg-white/[0.06] border border-[#323438] rounded-xl cursor-pointer transition ${projectCardMinHeight}`}
               >
                 {/* Blue icon with concentric circles */}
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-500 text-white shadow-md shadow-blue-500/10">
+                <div
+                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent.solid} text-white shadow-md ${accent.shadow}`}
+                >
                   <div className="h-6 w-6 rounded-full border-[2.5px] border-white flex items-center justify-center">
                     <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
                   </div>

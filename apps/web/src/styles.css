@@ -16,16 +16,16 @@
 }
 
 .dark {
-  --primary: 217 91% 60%;
-  --secondary: 173 80% 40%;
-  --success: 142 71% 45%;
-  --warning: 45 93% 47%;
+  --primary: 204 90% 60%;
+  --secondary: 160 64% 45%;
+  --success: 152 69% 45%;
+  --warning: 38 92% 50%;
   --danger: 0 84% 60%;
-  --background: 220 3% 16%; /* #252628 (Main background, matching screenshot) */
-  --foreground: 210 40% 98%;
-  --muted: 220 4% 21%; /* #333538 (Muted elements / tabs) */
-  --card: 220 5% 11%; /* #1c1d1f (Card and sidebar bg, matching screenshot) */
-  --border: 220 4% 20%; /* #303133 (Subtle borders) */
+  --background: 168 8% 7%;
+  --foreground: 180 9% 96%;
+  --muted: 220 4% 21%;
+  --card: 220 6% 15%;
+  --border: 220 5% 22%;
 }
 
 /* Custom premium card shadow */
