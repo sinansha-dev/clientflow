@@ -28,6 +28,8 @@ import {
   paymentRoutes,
   expenseRoutes,
   financeReportRoutes,
+  billingPlanRoutes,
+  recurringServiceRoutes,
 } from './routes/finance.routes';
 import { searchRoutes } from './routes/search.routes';
 import { errorMiddleware } from './middleware/error';
@@ -83,6 +85,8 @@ app.use('/invoices', invoiceRoutes);
 app.use('/payments', paymentRoutes);
 app.use('/expenses', expenseRoutes);
 app.use('/reports', financeReportRoutes);
+app.use('/billing-plans', billingPlanRoutes);
+app.use('/recurring-services', recurringServiceRoutes);
 app.use('/search', searchRoutes);
 
 app.use((_req, res) => {

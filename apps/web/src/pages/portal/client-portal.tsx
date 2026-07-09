@@ -38,6 +38,8 @@ type PortalProject = {
   portalMessages?: PortalMessage[];
   meetingsLinked?: Meeting[];
   portalActivities?: Activity[];
+  invoices?: any[];
+  quotations?: any[];
 };
 
 type PortalFile = {
@@ -106,6 +108,8 @@ type Dashboard = {
 const tabs = [
   'overview',
   'milestones',
+  'quotes',
+  'invoices',
   'files',
   'approvals',
   'messages',
@@ -535,6 +539,224 @@ export function ClientPortalPage() {
             </Card>
           )}
 
+          {tab === 'quotes' && (
+            <Card className="p-0 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                      <th className="px-6 py-4">Quote Number</th>
+                      <th className="px-6 py-4">Title</th>
+                      <th className="px-6 py-4">Amount</th>
+                      <th className="px-6 py-4">Valid Until</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {project.quotations?.length ? (
+                      project.quotations.map((quote) => (
+                        <tr key={quote.id} className="border-b border-border">
+                          <td className="px-6 py-4 font-bold">{quote.quoteNumber}</td>
+                          <td className="px-6 py-4">{quote.title}</td>
+                          <td className="px-6 py-4 font-semibold">
+                            ${quote.total.toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            {new Date(quote.validUntil).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                quote.status === 'ACCEPTED'
+                                  ? 'bg-emerald-500/10 text-emerald-600'
+                                  : 'bg-amber-500/10 text-amber-600'
+                              }`}
+                            >
+                              {quote.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            {quote.status !== 'ACCEPTED' && (
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    await api.post(`/quotations/${quote.id}/approve`);
+                                    notify({ type: 'success', title: 'Quotation Approved' });
+                                    loadProject(project.id);
+                                  } catch (err) {
+                                    notify({
+                                      type: 'error',
+                                      title: 'Approval failed',
+                                      message: errorMessage(err),
+                                    });
+                                  }
+                                }}
+                                className="font-bold text-xs h-8 px-3"
+                              >
+                                Accept & Sign
+                              </Button>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-6 py-12 text-center text-foreground/45 italic"
+                        >
+                          No quotations found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          )}
+
+          {tab === 'invoices' && (
+            <div className="grid gap-6">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Card className="p-4">
+                  <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                    Outstanding Balance
+                  </span>
+                  <span className="text-xl font-bold mt-1 block text-danger">
+                    $
+                    {(
+                      project.invoices?.reduce((sum, i) => sum + i.balanceDue, 0) || 0
+                    ).toLocaleString()}
+                  </span>
+                </Card>
+                <Card className="p-4">
+                  <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                    Total Payments Made
+                  </span>
+                  <span className="text-xl font-bold mt-1 block text-emerald-600">
+                    $
+                    {(
+                      project.invoices?.reduce((sum, i) => sum + i.amountPaid, 0) || 0
+                    ).toLocaleString()}
+                  </span>
+                </Card>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-2">Invoices</h3>
+                <Card className="p-0 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                          <th className="px-6 py-4">Invoice Number</th>
+                          <th className="px-6 py-4">Amount</th>
+                          <th className="px-6 py-4">Balance</th>
+                          <th className="px-6 py-4">Due Date</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4">PDF</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {project.invoices?.length ? (
+                          project.invoices.map((invoice) => (
+                            <tr key={invoice.id} className="border-b border-border">
+                              <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                              <td className="px-6 py-4">
+                                {invoice.currency} {invoice.total.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-danger">
+                                {invoice.currency} {invoice.balanceDue.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4">
+                                {new Date(invoice.dueDate).toLocaleDateString()}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-primary">{invoice.status}</td>
+                              <td className="px-6 py-4">
+                                <a
+                                  href={`${api.defaults.baseURL}/invoices/${invoice.id}/pdf`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline font-bold text-xs inline-flex items-center gap-1"
+                                >
+                                  <Download className="h-3 w-3" /> Download
+                                </a>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={6}
+                              className="px-6 py-12 text-center text-foreground/45 italic"
+                            >
+                              No invoices found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-2">Payment Receipts</h3>
+                <Card className="p-0 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                          <th className="px-6 py-4">Invoice Number</th>
+                          <th className="px-6 py-4">Method</th>
+                          <th className="px-6 py-4">Reference</th>
+                          <th className="px-6 py-4">Amount</th>
+                          <th className="px-6 py-4">Date</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {project.invoices?.some((i) => i.payments?.length) ? (
+                          project.invoices
+                            .flatMap((i) =>
+                              (i.payments || []).map((p: any) => ({
+                                ...p,
+                                invoiceNumber: i.invoiceNumber,
+                              })),
+                            )
+                            .map((p: any) => (
+                              <tr key={p.id} className="border-b border-border">
+                                <td className="px-6 py-4 font-bold">{p.invoiceNumber}</td>
+                                <td className="px-6 py-4 font-medium">{p.paymentMethod}</td>
+                                <td className="px-6 py-4 font-mono text-foreground/60">
+                                  {p.referenceNumber || 'N/A'}
+                                </td>
+                                <td className="px-6 py-4 font-bold text-emerald-600">
+                                  ${p.amount.toLocaleString()}
+                                </td>
+                                <td className="px-6 py-4 text-foreground/60">
+                                  {new Date(p.paymentDate).toLocaleDateString()}
+                                </td>
+                              </tr>
+                            ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={5}
+                              className="px-6 py-12 text-center text-foreground/45 italic"
+                            >
+                              No payment history found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+            </div>
+          )}
+
           {tab === 'activity' && (
             <Card>
               <div className="grid gap-3">
@@ -545,7 +767,7 @@ export function ClientPortalPage() {
                       {item.description}
                     </p>
                     <p className="mt-1 text-xs text-foreground/50">
-                      {item.type} � {new Date(item.createdAt).toLocaleString()}
+                      {item.type} {new Date(item.createdAt).toLocaleString()}
                     </p>
                   </div>
                 ))}

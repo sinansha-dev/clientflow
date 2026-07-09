@@ -6,69 +6,63 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { CreateTaskModal } from '../components/tasks/create-task-modal';
 import { ProjectWizard } from '../components/projects/project-wizard';
-import type { Project, Task, ProjectTeam } from '@clientflow/types';
+import type { Project, Task, ProjectTeam, TimeLog, Invoice, Meeting } from '@clientflow/types';
 import {
   Lock,
-  MoreHorizontal,
   Plus,
   CheckCircle2,
-  UsersRound,
   ChevronDown,
+  ChevronUp,
   Check,
+  TrendingUp,
+  Briefcase,
+  AlertTriangle,
+  Clock,
+  DollarSign,
+  Calendar,
+  Activity,
+  Video,
+  Award,
+  Settings,
+  Eye,
+  EyeOff,
+  Bell,
+  CheckCircle,
 } from 'lucide-react';
 
-type DashboardAccent = 'emerald' | 'blue' | 'rose' | 'amber';
 type DashboardDensity = 'comfortable' | 'compact';
 
-const accentStyles: Record<
-  DashboardAccent,
-  {
-    label: string;
-    swatch: string;
-    text: string;
-    bg: string;
-    border: string;
-    solid: string;
-    shadow: string;
-  }
-> = {
-  emerald: {
-    label: 'Emerald',
-    swatch: 'bg-emerald-400',
-    text: 'text-emerald-400',
-    bg: 'bg-emerald-400/10',
-    border: 'border-emerald-400/25',
-    solid: 'bg-emerald-500',
-    shadow: 'shadow-emerald-500/10',
-  },
-  blue: {
-    label: 'Blue',
-    swatch: 'bg-[#4dabf7]',
-    text: 'text-[#4dabf7]',
-    bg: 'bg-[#4dabf7]/10',
-    border: 'border-[#4dabf7]/25',
-    solid: 'bg-blue-500',
-    shadow: 'shadow-blue-500/10',
-  },
-  rose: {
-    label: 'Rose',
-    swatch: 'bg-[#ec8c9f]',
-    text: 'text-[#ec8c9f]',
-    bg: 'bg-[#ec8c9f]/10',
-    border: 'border-[#ec8c9f]/25',
-    solid: 'bg-[#ec8c9f]',
-    shadow: 'shadow-[#ec8c9f]/10',
-  },
-  amber: {
-    label: 'Amber',
-    swatch: 'bg-[#f59f00]',
-    text: 'text-[#f59f00]',
-    bg: 'bg-[#f59f00]/10',
-    border: 'border-[#f59f00]/25',
-    solid: 'bg-[#f59f00]',
-    shadow: 'shadow-[#f59f00]/10',
-  },
-};
+type WidgetId =
+  | 'stats'
+  | 'revenue'
+  | 'my-tasks'
+  | 'projects'
+  | 'meetings'
+  | 'team-productivity'
+  | 'activity'
+  | 'project-status'
+  | 'notifications';
+
+interface WidgetConfig {
+  id: WidgetId;
+  title: string;
+  visible: boolean;
+  collapsed: boolean;
+}
+
+interface ClientApproval {
+  id: string;
+  status: string;
+  title: string;
+  createdAt: string;
+}
+
+interface DeveloperProductivity {
+  name: string;
+  hours: number;
+  status: string;
+}
+
 export function DashboardPage() {
   const navigate = useNavigate();
   const user = useAuthStore((state) => state.user);
@@ -76,31 +70,88 @@ export function DashboardPage() {
 
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
+  const [approvals, setApprovals] = useState<ClientApproval[]>([]);
+  const [timeLogs, setTimeLogs] = useState<TimeLog[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal states
+  // Widget settings configuration
+  const [widgets, setWidgets] = useState<WidgetConfig[]>(() => {
+    const stored = localStorage.getItem('dashboard-widgets-config');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.error('Failed to parse widget layout', e);
+      }
+    }
+    return [
+      { id: 'stats', title: 'Workplace Metrics', visible: true, collapsed: false },
+      { id: 'revenue', title: 'Revenue Analytics', visible: true, collapsed: false },
+      { id: 'my-tasks', title: 'My Tasks Checklist', visible: true, collapsed: false },
+      { id: 'projects', title: 'Active Projects Grid', visible: true, collapsed: false },
+      { id: 'meetings', title: 'Upcoming Client Meetings', visible: true, collapsed: false },
+      { id: 'team-productivity', title: 'Team Productivity', visible: true, collapsed: false },
+      { id: 'activity', title: 'Recent Activity Logs', visible: true, collapsed: false },
+      {
+        id: 'project-status',
+        title: 'Projects Status Distribution',
+        visible: true,
+        collapsed: false,
+      },
+      { id: 'notifications', title: 'Workspace Notifications', visible: true, collapsed: false },
+    ];
+  });
+
+  const [showConfigPanel, setShowConfigPanel] = useState(false);
+  const [revenueFilter, setRevenueFilter] = useState<'weekly' | 'monthly' | 'yearly'>('monthly');
+  const [hoveredBar, setHoveredBar] = useState<{
+    index: number;
+    x: number;
+    y: number;
+    val: number;
+  } | null>(null);
+
+  // Modals
   const [isCreateTaskOpen, setIsCreateTaskOpen] = useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = useState(false);
-  const [dashboardAccent, setDashboardAccent] = useState<DashboardAccent>(() => {
-    const stored = localStorage.getItem('workspace-accent') as DashboardAccent | null;
-    return stored && stored in accentStyles ? stored : 'blue';
-  });
+
   const [dashboardDensity, setDashboardDensity] = useState<DashboardDensity>(() => {
     const stored = localStorage.getItem('workspace-density') as DashboardDensity | null;
     return stored === 'compact' ? stored : 'comfortable';
   });
 
   // Tab state for My Tasks
-  const [taskTab, setTaskTab] = useState<'upcoming' | 'overdue' | 'completed'>('upcoming');
+  const [taskTab, setTaskTab] = useState<'upcoming' | 'today' | 'overdue' | 'completed'>(
+    'upcoming',
+  );
 
   const fetchDashboardStats = useCallback(async () => {
     try {
-      const [prjRes, taskRes] = await Promise.all([
+      const [prjRes, taskRes, invRes, meetRes, appRes, timeRes] = await Promise.all([
         api.get('/projects?limit=1000'),
         api.get('/tasks'),
+        api.get('/invoices').catch(() => ({ data: { data: [] } })),
+        api.get('/meetings').catch(() => ({ data: { data: [] } })),
+        api.get('/approvals').catch(() => ({ data: { data: [] } })),
+        api.get('/timelogs').catch(() => ({ data: { data: [] } })),
       ]);
+
       setProjects(prjRes.data.data?.items ?? []);
       setTasks(taskRes.data.data ?? []);
+      setInvoices(invRes.data?.data ?? []);
+      setMeetings(meetRes.data?.data ?? []);
+
+      const approvalsData = appRes.data?.data;
+      const approvalsArray = Array.isArray(approvalsData)
+        ? approvalsData
+        : Array.isArray(approvalsData?.approvals)
+          ? approvalsData.approvals
+          : [];
+      setApprovals(approvalsArray);
+
+      setTimeLogs(timeRes.data?.data ?? []);
     } catch (err) {
       console.error('Failed to load dashboard statistics:', err);
       notify({
@@ -119,9 +170,7 @@ export function DashboardPage() {
 
   useEffect(() => {
     const syncWorkspacePreferences = () => {
-      const storedAccent = localStorage.getItem('workspace-accent') as DashboardAccent | null;
       const storedDensity = localStorage.getItem('workspace-density') as DashboardDensity | null;
-      setDashboardAccent(storedAccent && storedAccent in accentStyles ? storedAccent : 'blue');
       setDashboardDensity(storedDensity === 'compact' ? 'compact' : 'comfortable');
     };
 
@@ -132,33 +181,75 @@ export function DashboardPage() {
     };
   }, []);
 
+  const saveWidgetConfig = (newWidgets: WidgetConfig[]) => {
+    setWidgets(newWidgets);
+    localStorage.setItem('dashboard-widgets-config', JSON.stringify(newWidgets));
+  };
+
+  const toggleWidgetCollapse = (id: WidgetId) => {
+    const next = widgets.map((w) => (w.id === id ? { ...w, collapsed: !w.collapsed } : w));
+    saveWidgetConfig(next);
+  };
+
+  const toggleWidgetVisibility = (id: WidgetId) => {
+    const next = widgets.map((w) => (w.id === id ? { ...w, visible: !w.visible } : w));
+    saveWidgetConfig(next);
+  };
+
+  const moveWidget = (index: number, direction: 'up' | 'down') => {
+    const nextIndex = direction === 'up' ? index - 1 : index + 1;
+    if (nextIndex < 0 || nextIndex >= widgets.length) return;
+    const next = [...widgets];
+    const temp = next[index];
+    const target = next[nextIndex];
+    if (temp && target) {
+      next[index] = target;
+      next[nextIndex] = temp;
+      saveWidgetConfig(next);
+    }
+  };
+
   // Date Formatting
   const formattedDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long',
     month: 'long',
     day: 'numeric',
+    year: 'numeric',
   });
 
   // Dynamic Greeting
   const getGreeting = () => {
     const hour = new Date().getHours();
-    const name = user?.firstName ? user.firstName.toUpperCase() : 'USER';
+    const name = user?.firstName ? user.firstName : 'User';
     if (hour < 12) return `Good morning, ${name}`;
     if (hour < 17) return `Good afternoon, ${name}`;
     return `Good evening, ${name}`;
   };
 
-  // Initials for avatar
-  const getInitials = () => {
-    const first = user?.firstName?.charAt(0) || '';
-    const last = user?.lastName?.charAt(0) || '';
-    return `${first}${last}`.toUpperCase() || 'CF';
-  };
+  // Calculations for dashboard
+  const activeProjectsCount = projects.filter(
+    (p) => p.status === 'IN_PROGRESS' || p.status === 'PLANNING',
+  ).length;
+  const completedProjectsCount = projects.filter((p) => p.status === 'COMPLETED').length;
 
-  // Calculations for Tasks Completed and Collaborators
   const myTasks = tasks.filter((t) => t.assignees?.some((a) => a.id === user?.id));
   const completedTasksCount = myTasks.filter((t) => t.status === 'COMPLETED').length;
+  const pendingTasksCount = myTasks.filter((t) => t.status !== 'COMPLETED').length;
 
+  const overdueTasksCount = myTasks.filter((t) => {
+    if (t.status === 'COMPLETED' || !t.dueDate) return false;
+    return new Date(t.dueDate) < new Date();
+  }).length;
+
+  const totalRevenue = invoices.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0);
+  const totalOutstanding = invoices
+    .filter((inv) => inv.status !== 'VOID')
+    .reduce((sum, inv) => sum + (inv.balanceDue || 0), 0);
+
+  const pendingClientApprovalsCount = approvals.filter((app) => app.status === 'PENDING').length;
+  const upcomingMeetingsCount = meetings.filter((m) => new Date(m.startTime) >= new Date()).length;
+
+  // Collaborators
   const collaboratorIds = new Set<string>();
   projects.forEach((p) => {
     if (p.projectManagerId && p.projectManagerId !== user?.id) {
@@ -166,20 +257,21 @@ export function DashboardPage() {
     }
     if (p.teamMembers) {
       p.teamMembers.forEach((member: ProjectTeam) => {
-        if (!member) return;
-        const id = member.userId;
-        if (id && id !== user?.id) {
-          collaboratorIds.add(id);
+        if (member?.userId && member.userId !== user?.id) {
+          collaboratorIds.add(member.userId);
         }
       });
     }
   });
   const collaboratorsCount = collaboratorIds.size;
 
-  // Task filtering based on selected tab
+  // Filter Tasks
   const getFilteredTasks = () => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
 
     if (taskTab === 'completed') {
       return myTasks.filter((t) => t.status === 'COMPLETED');
@@ -192,36 +284,31 @@ export function DashboardPage() {
       });
     }
 
-    // Upcoming
+    if (taskTab === 'today') {
+      return myTasks.filter((t) => {
+        if (t.status === 'COMPLETED' || !t.dueDate) return false;
+        const due = new Date(t.dueDate);
+        return due >= today && due <= endOfToday;
+      });
+    }
+
+    // Upcoming (due in future, after today)
     return myTasks.filter((t) => {
       if (t.status === 'COMPLETED') return false;
       if (!t.dueDate) return true;
-      return new Date(t.dueDate) >= today;
+      return new Date(t.dueDate) > endOfToday;
     });
   };
 
   const filteredTasks = getFilteredTasks();
   const canCreateTasks = user?.role === 'ADMIN';
-  const accent = accentStyles[dashboardAccent];
-  const panelPadding = dashboardDensity === 'compact' ? 'p-4' : 'p-6';
-  const panelMinHeight = dashboardDensity === 'compact' ? 'min-h-[380px]' : 'min-h-[480px]';
-  const projectCardMinHeight = dashboardDensity === 'compact' ? 'min-h-[112px]' : 'min-h-[140px]';
+  const padding = dashboardDensity === 'compact' ? 'p-4' : 'p-6';
 
-  // Tasks due soon text for projects
-  const getTasksDueSoon = (projId: string) => {
-    const projTasks = tasks.filter((t) => t.projectId === projId && t.status !== 'COMPLETED');
-    const soonCount = projTasks.length;
-    if (soonCount === 0) return 'No tasks remaining';
-    if (soonCount === 1) return '1 task due soon';
-    return `${soonCount} tasks due soon`;
-  };
-
-  // Task Completion Toggler
   const toggleTaskCompletion = async (task: Task) => {
     const isNowCompleted = task.status !== 'COMPLETED';
     const newStatus = isNowCompleted ? 'COMPLETED' : 'TODO';
 
-    // Optimistic UI Update
+    // Optimistic Update
     setTasks((prev) =>
       prev.map((t) =>
         t.id === task.id
@@ -241,28 +328,49 @@ export function DashboardPage() {
         title: isNowCompleted ? 'Task completed' : 'Task marked incomplete',
         message: `"${task.title}" updated.`,
       });
-      // Fetch latest states in background
       const taskRes = await api.get('/tasks');
       setTasks(taskRes.data.data ?? []);
     } catch (err) {
-      console.error('Failed to toggle task completion status:', err);
+      console.error('Failed to toggle task completion:', err);
       notify({
         type: 'error',
         title: 'Status Update Failed',
         message: errorMessage(err, 'Could not sync task status.'),
       });
-      // Rollback
       fetchDashboardStats();
     }
   };
 
-  // Date Formatter helper for task row (e.g. "7 - 9 Jul" or "25 Jul")
-  const formatTaskDate = (
-    start: string | Date | null | undefined,
-    due: string | Date | null | undefined,
-  ) => {
+  const formatTaskDate = (due: string | Date | null | undefined) => {
     if (!due) return '';
-    const months = [
+    const date = new Date(due);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  // Dynamic revenue calculation from actual invoices
+  const getDynamicRevenueChartData = () => {
+    const weeklyMap = { Mon: 0, Tue: 0, Wed: 0, Thu: 0, Fri: 0, Sat: 0, Sun: 0 };
+    const monthlyMap = {
+      Jan: 0,
+      Feb: 0,
+      Mar: 0,
+      Apr: 0,
+      May: 0,
+      Jun: 0,
+      Jul: 0,
+      Aug: 0,
+      Sep: 0,
+      Oct: 0,
+      Nov: 0,
+      Dec: 0,
+    };
+    const yearlyMap: Record<string, number> = {};
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+
+    const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const monthsOfYear = [
       'Jan',
       'Feb',
       'Mar',
@@ -276,239 +384,1035 @@ export function DashboardPage() {
       'Nov',
       'Dec',
     ];
-    const dueD = new Date(due);
-    const dueDay = dueD.getDate();
-    const dueMonth = months[dueD.getMonth()];
 
-    if (start) {
-      const startD = new Date(start);
-      const startDay = startD.getDate();
-      const startMonth = months[startD.getMonth()];
-      if (startMonth === dueMonth) {
-        return `${startDay} - ${dueDay} ${dueMonth}`;
-      } else {
-        return `${startDay} ${startMonth} - ${dueDay} ${dueMonth}`;
+    invoices.forEach((inv) => {
+      if (!inv.amountPaid || inv.amountPaid <= 0) return;
+
+      const date = new Date(inv.issueDate || inv.createdAt);
+      const year = date.getFullYear();
+      const amount = Number(inv.amountPaid);
+
+      // Yearly grouping
+      const yearStr = String(year);
+      yearlyMap[yearStr] = (yearlyMap[yearStr] || 0) + amount;
+
+      // Monthly grouping (current year)
+      if (year === currentYear) {
+        const monthIndex = date.getMonth();
+        const monthName = monthsOfYear[monthIndex];
+        if (monthName && monthName in monthlyMap) {
+          monthlyMap[monthName as keyof typeof monthlyMap] += amount;
+        }
       }
+
+      // Weekly grouping (within last 7 days)
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(now.getDate() - 7);
+      if (date >= oneWeekAgo && date <= now) {
+        const dayIndex = date.getDay();
+        const dayName = daysOfWeek[dayIndex];
+        if (dayName && dayName in weeklyMap) {
+          weeklyMap[dayName as keyof typeof weeklyMap] += amount;
+        }
+      }
+    });
+
+    const weekly = Object.entries(weeklyMap).map(([name, amount]) => ({ name, amount }));
+    const monthly = Object.entries(monthlyMap).map(([name, amount]) => ({ name, amount }));
+
+    // Sort years ascending
+    const sortedYears = Object.keys(yearlyMap).sort();
+    if (sortedYears.length === 0) {
+      sortedYears.push(String(currentYear - 2), String(currentYear - 1), String(currentYear));
     }
-    return `${dueDay} ${dueMonth}`;
+    const yearly = sortedYears.map((name) => ({
+      name,
+      amount: yearlyMap[name] || 0,
+    }));
+
+    return { weekly, monthly, yearly };
   };
+
+  const revenueChartData = getDynamicRevenueChartData();
+
+  // Dynamic Activity Logs helper
+  const getDynamicActivityLogs = () => {
+    const allActivities = projects.flatMap((p) => {
+      const pActivities = p.activities || [];
+      return pActivities.map((act) => ({
+        ...act,
+        projectName: p.projectName,
+        projectCode: p.projectCode,
+      }));
+    });
+
+    return allActivities
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 10);
+  };
+
+  const getRelativeTime = (dateString: string | Date) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  };
+
+  const recentActivities = getDynamicActivityLogs();
 
   if (loading) {
     return (
-      <div className="-mx-4 -my-6 md:-mx-8 p-6 md:p-8 min-h-[calc(100vh-10rem)] bg-gradient-to-br from-[#192723] via-[#121817] to-[#0d0e0e] text-[#f5f6f6] flex items-center justify-center">
+      <div className="min-h-[calc(100vh-10rem)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-8 w-8 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-          <span className="text-sm font-medium text-zinc-400">Loading your workspace...</span>
+          <div className="h-8 w-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-semibold text-foreground/50">
+            Loading ClientFlow dashboard...
+          </span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="-mx-4 -my-6 md:-mx-8 p-6 md:p-8 min-h-[calc(100vh-10rem)] bg-gradient-to-br from-[#192723] via-[#121817] to-[#0d0e0e] text-[#f5f6f6] font-sans antialiased">
-      {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+    <div className="space-y-6">
+      {/* Welcome Banner Section */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-gradient-to-r from-primary/5 via-secondary/5 to-accent/5 p-6 rounded-2xl border border-border/60">
         <div>
-          <span className="text-sm font-medium text-zinc-400">{formattedDate}</span>
-          <h1 className="text-3xl font-semibold tracking-tight text-white mt-1">{getGreeting()}</h1>
+          <span className="text-xs font-bold text-primary tracking-wide uppercase">
+            {formattedDate}
+          </span>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground mt-1">
+            {getGreeting()}
+          </h1>
+          <p className="text-xs text-foreground/50 mt-1">
+            Here is a summary of what's happening at your agency today. You have completed{' '}
+            {completedTasksCount} tasks so far!
+          </p>
         </div>
 
-        {/* Action pills */}
-        <div className="flex flex-wrap items-center gap-2 text-zinc-300">
-          <button className="flex items-center gap-1 px-3 py-1.5 bg-white/10 hover:bg-white/15 rounded-full text-xs font-medium border border-white/5 transition">
-            <span>My week</span>
-            <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Customize Layout Trigger */}
+          <button
+            onClick={() => setShowConfigPanel(!showConfigPanel)}
+            className="flex items-center gap-1.5 px-3 py-2 bg-card hover:bg-muted text-foreground border border-border rounded-xl text-xs font-bold transition-all shadow-sm"
+          >
+            <Settings className="h-3.5 w-3.5" />
+            <span>Customize layout</span>
           </button>
 
-          <div
-            className={`flex items-center gap-4 px-4 py-1.5 bg-white/10 rounded-full text-xs font-medium border border-white/5 text-zinc-300 ${accent.border}`}
+          <button
+            onClick={() => setIsCreateProjectOpen(true)}
+            className="flex items-center gap-1.5 px-4 py-2 bg-primary hover:bg-primary/95 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-primary/10"
           >
-            <span className="flex items-center gap-1.5">
-              <CheckCircle2 className={`h-4 w-4 ${accent.text}`} />
-              {completedTasksCount} tasks completed
-            </span>
-            <div className="h-3.5 w-[1px] bg-white/10" />
-            <span className="flex items-center gap-1.5">
-              <UsersRound className={`h-4 w-4 ${accent.text}`} />
-              {collaboratorsCount} collaborators
-            </span>
-          </div>
+            <Plus className="h-3.5 w-3.5" />
+            <span>Create Project</span>
+          </button>
         </div>
       </div>
 
-      {/* Main Widgets Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-        {/* Left Column: My Tasks */}
-        <div
-          className={`bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden flex flex-col ${panelPadding} ${panelMinHeight}`}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              {/* Pink/Pastel avatar with initials */}
-              <div
-                className={`flex h-8 w-8 items-center justify-center rounded-full ${accent.solid} text-white text-xs font-bold font-mono shadow-inner shadow-black/10 select-none`}
-              >
-                {getInitials()}
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="font-semibold text-lg text-white">My tasks</span>
-                <Lock className="h-4 w-4 text-zinc-400" />
-              </div>
-            </div>
-            <button className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition">
-              <MoreHorizontal className="h-5 w-5" />
+      {/* Widget customization settings panel */}
+      {showConfigPanel && (
+        <div className="bg-card border border-border p-4 rounded-2xl shadow-xl space-y-3">
+          <div className="flex justify-between items-center pb-2 border-b border-border">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-foreground/60 flex items-center gap-1.5">
+              <Settings className="h-4 w-4 text-primary" /> Customize Workspace Dashboard
+            </h3>
+            <button
+              onClick={() => setShowConfigPanel(false)}
+              className="text-xs font-bold text-primary hover:underline"
+            >
+              Done
             </button>
           </div>
-
-          {/* Tabs */}
-          <div className="flex border-b border-[#323438] gap-4 mb-4 text-sm">
-            {(['upcoming', 'overdue', 'completed'] as const).map((tab) => (
-              <button
-                key={tab}
-                onClick={() => setTaskTab(tab)}
-                className={`pb-2.5 font-medium transition capitalize relative ${
-                  taskTab === tab ? 'text-white' : 'text-zinc-400 hover:text-zinc-200'
-                }`}
+          <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 text-xs font-medium">
+            {widgets.map((widget, index) => (
+              <div
+                key={widget.id}
+                className="flex items-center justify-between p-2.5 rounded-xl border border-border bg-background/50 hover:bg-background transition"
               >
-                {tab}
-                {taskTab === tab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-white rounded-full" />
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleWidgetVisibility(widget.id)}
+                    className="p-1 hover:bg-muted rounded text-foreground/75"
+                    title={widget.visible ? 'Hide widget' : 'Show widget'}
+                  >
+                    {widget.visible ? (
+                      <Eye className="h-4 w-4" />
+                    ) : (
+                      <EyeOff className="h-4 w-4 text-foreground/35" />
+                    )}
+                  </button>
+                  <span className={widget.visible ? 'text-foreground' : 'text-foreground/40'}>
+                    {widget.title}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => moveWidget(index, 'up')}
+                    disabled={index === 0}
+                    className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
+                    title="Move Up"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => moveWidget(index, 'down')}
+                    disabled={index === widgets.length - 1}
+                    className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
+                    title="Move Down"
+                  >
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Render Dynamic Layout Flow */}
+      <div className="space-y-6">
+        {widgets
+          .filter((w) => w.visible)
+          .map((widget) => {
+            const collapseToggle = (
+              <button
+                onClick={() => toggleWidgetCollapse(widget.id)}
+                className="p-1.5 text-foreground/45 hover:text-foreground hover:bg-muted rounded-lg transition"
+                title={widget.collapsed ? 'Expand' : 'Collapse'}
+              >
+                {widget.collapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
                 )}
               </button>
-            ))}
-          </div>
+            );
 
-          {/* Create Task Button */}
-          {canCreateTasks && (
-            <button
-              onClick={() => setIsCreateTaskOpen(true)}
-              className="flex items-center gap-2 text-zinc-400 hover:text-zinc-200 text-sm mb-4 transition w-fit py-1.5 px-2.5 hover:bg-white/5 border border-zinc-700/50 rounded-lg -ml-1"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Create task</span>
-            </button>
-          )}
-
-          {/* Task List */}
-          <div className="flex-1 flex flex-col divide-y divide-[#323438]/50">
-            {filteredTasks.length === 0 ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-zinc-500 py-12 text-sm italic">
-                No tasks in this section
-              </div>
-            ) : (
-              filteredTasks.map((task) => (
-                <div
-                  key={task.id}
-                  className="py-3 flex items-center justify-between gap-3 text-sm group"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    {/* Circle Checkbox Button */}
-                    <button
-                      onClick={() => toggleTaskCompletion(task)}
-                      className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition-all transform hover:scale-105 duration-100 ${
-                        task.status === 'COMPLETED'
-                          ? `${accent.border} ${accent.bg} ${accent.text}`
-                          : 'border-zinc-500 hover:border-zinc-300 text-transparent hover:text-zinc-400'
-                      }`}
-                    >
-                      <Check className="h-3 w-3" />
-                    </button>
-
-                    {/* Task Title */}
-                    <span
-                      onClick={() => navigate('/tasks')}
-                      className={`truncate cursor-pointer hover:underline ${
-                        task.status === 'COMPLETED' ? 'line-through text-zinc-500' : 'text-zinc-200'
-                      }`}
-                    >
-                      {task.title}
-                    </span>
+            // RENDER INDIVIDUAL WIDGETS
+            if (widget.id === 'stats') {
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Activity className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
                   </div>
+                  {!widget.collapsed && (
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {/* Active Projects */}
+                      <div className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Active Projects
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-blue-500/10 text-blue-500 flex items-center justify-center border border-blue-500/10 group-hover:scale-105 transition-transform">
+                            <Briefcase className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {activeProjectsCount}
+                          </span>
+                          <span className="text-[10px] font-bold text-emerald-500 flex items-center gap-0.5">
+                            <TrendingUp className="h-3 w-3" /> +1
+                          </span>
+                        </div>
+                      </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
-                    {/* Project badge */}
-                    {task.project && (
-                      <span
-                        className={`${accent.bg} ${accent.text} border ${accent.border} px-2 py-0.5 text-[10px] rounded-md font-medium max-w-[100px] truncate`}
+                      {/* Completed Projects */}
+                      <div className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Completed Projects
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center border border-emerald-500/10 group-hover:scale-105 transition-transform">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {completedProjectsCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pending Tasks */}
+                      <div className="bg-card border border-border hover:border-secondary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Pending Tasks
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/10 group-hover:scale-105 transition-transform">
+                            <CheckCircle2 className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {pendingTasksCount}
+                          </span>
+                          {overdueTasksCount > 0 && (
+                            <span className="text-[10px] font-bold text-danger flex items-center gap-0.5 bg-danger/10 px-1.5 py-0.5 rounded-full">
+                              <AlertTriangle className="h-3 w-3" /> {overdueTasksCount} overdue
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Overdue Tasks */}
+                      <div className="bg-card border border-border hover:border-secondary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Overdue Tasks
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-red-500/10 text-red-500 flex items-center justify-center border border-red-500/10 group-hover:scale-105 transition-transform">
+                            <AlertTriangle className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {overdueTasksCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Revenue Generated */}
+                      <div className="bg-card border border-border hover:border-accent/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Revenue Collected
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center border border-purple-500/10 group-hover:scale-105 transition-transform">
+                            <DollarSign className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-1 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Outstanding payments */}
+                      <div className="bg-card border border-border hover:border-amber-500/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Outstanding Invoices
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/10 group-hover:scale-105 transition-transform">
+                            <Clock className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            $
+                            {totalOutstanding.toLocaleString(undefined, {
+                              minimumFractionDigits: 0,
+                            })}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Pending Approvals */}
+                      <div className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Pending Approvals
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-indigo-500/10 text-indigo-500 flex items-center justify-center border border-indigo-500/10 group-hover:scale-105 transition-transform">
+                            <CheckCircle className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {pendingClientApprovalsCount}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Upcoming Meetings */}
+                      <div className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                            Upcoming Meetings
+                          </span>
+                          <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/10 group-hover:scale-105 transition-transform">
+                            <Calendar className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="flex items-baseline gap-2 mt-2">
+                          <span className="text-2xl font-bold text-foreground">
+                            {upcomingMeetingsCount}
+                          </span>
+                          <span className="text-[9px] text-foreground/45">
+                            Collaborators: {collaboratorsCount}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'revenue') {
+              const activeData = revenueChartData[revenueFilter];
+              const maxVal = Math.max(...activeData.map((d) => d.amount));
+
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <DollarSign className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    <div className="flex items-center gap-2">
+                      <div className="flex bg-muted/60 p-0.5 rounded-lg border border-border">
+                        {(['weekly', 'monthly', 'yearly'] as const).map((filter) => (
+                          <button
+                            key={filter}
+                            onClick={() => setRevenueFilter(filter)}
+                            className={`px-2.5 py-1 rounded-md text-[10px] font-bold capitalize transition-colors ${
+                              revenueFilter === filter
+                                ? 'bg-card text-foreground shadow-sm'
+                                : 'text-foreground/45 hover:text-foreground'
+                            }`}
+                          >
+                            {filter}
+                          </button>
+                        ))}
+                      </div>
+                      {collapseToggle}
+                    </div>
+                  </div>
+                  {!widget.collapsed && (
+                    <div className="bg-card border border-border rounded-2xl p-6 shadow-sm relative">
+                      {/* Premium Custom Interactive SVG Chart */}
+                      <div className="relative pt-6">
+                        {hoveredBar && (
+                          <div
+                            className="absolute bg-foreground text-background text-[10px] font-bold py-1 px-2 rounded-lg pointer-events-none transform -translate-x-1/2 -translate-y-full shadow-lg border border-border"
+                            style={{ left: hoveredBar.x, top: hoveredBar.y - 8 }}
+                          >
+                            ${hoveredBar.val.toLocaleString()}
+                          </div>
+                        )}
+                        <svg
+                          className="w-full h-44"
+                          viewBox="0 0 600 180"
+                          preserveAspectRatio="none"
+                        >
+                          <defs>
+                            <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+                              <stop
+                                offset="0%"
+                                stopColor="hsl(var(--primary))"
+                                stopOpacity="0.45"
+                              />
+                              <stop
+                                offset="100%"
+                                stopColor="hsl(var(--primary))"
+                                stopOpacity="0.02"
+                              />
+                            </linearGradient>
+                          </defs>
+
+                          {/* Grid Lines */}
+                          <line
+                            x1="0"
+                            y1="0"
+                            x2="600"
+                            y2="0"
+                            stroke="currentColor"
+                            className="text-border/40"
+                            strokeWidth="1"
+                            strokeDasharray="3 3"
+                          />
+                          <line
+                            x1="0"
+                            y1="50"
+                            x2="600"
+                            y2="50"
+                            stroke="currentColor"
+                            className="text-border/40"
+                            strokeWidth="1"
+                            strokeDasharray="3 3"
+                          />
+                          <line
+                            x1="0"
+                            y1="100"
+                            x2="600"
+                            y2="100"
+                            stroke="currentColor"
+                            className="text-border/40"
+                            strokeWidth="1"
+                            strokeDasharray="3 3"
+                          />
+                          <line
+                            x1="0"
+                            y1="150"
+                            x2="600"
+                            y2="150"
+                            stroke="currentColor"
+                            className="text-border/60"
+                            strokeWidth="1"
+                          />
+
+                          {/* Render Bars */}
+                          {activeData.map((d, index) => {
+                            const barWidth = 40;
+                            const spacing =
+                              (600 - barWidth * activeData.length) / (activeData.length + 1);
+                            const x = spacing + index * (barWidth + spacing);
+                            const barHeight = (d.amount / (maxVal || 1)) * 140;
+                            const y = 150 - barHeight;
+
+                            return (
+                              <g key={d.name}>
+                                {/* Gradient bar */}
+                                <rect
+                                  x={x}
+                                  y={y}
+                                  width={barWidth}
+                                  height={barHeight}
+                                  rx="6"
+                                  fill="url(#chartGradient)"
+                                  className="transition-all duration-300"
+                                />
+                                {/* Overlay hover bar */}
+                                <rect
+                                  x={x}
+                                  y={y}
+                                  width={barWidth}
+                                  height={barHeight}
+                                  rx="6"
+                                  fill="none"
+                                  stroke="hsl(var(--primary))"
+                                  strokeWidth={hoveredBar?.index === index ? '2.5' : '0'}
+                                  className="transition-all duration-150 cursor-pointer"
+                                  onMouseEnter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const parentRect =
+                                      e.currentTarget.parentElement?.parentElement?.getBoundingClientRect();
+                                    if (rect && parentRect) {
+                                      setHoveredBar({
+                                        index,
+                                        x: rect.left - parentRect.left + barWidth / 2,
+                                        y: rect.top - parentRect.top,
+                                        val: d.amount,
+                                      });
+                                    }
+                                  }}
+                                  onMouseLeave={() => setHoveredBar(null)}
+                                />
+                                {/* Bottom label */}
+                                <text
+                                  x={x + barWidth / 2}
+                                  y="170"
+                                  textAnchor="middle"
+                                  className="fill-foreground/45 text-[9px] font-bold font-sans"
+                                >
+                                  {d.name}
+                                </text>
+                              </g>
+                            );
+                          })}
+                        </svg>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'my-tasks') {
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Lock className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-4`}
+                    >
+                      {/* Tabs */}
+                      <div className="flex border-b border-border gap-4 text-xs font-semibold overflow-x-auto">
+                        {(['upcoming', 'today', 'overdue', 'completed'] as const).map((tab) => (
+                          <button
+                            key={tab}
+                            onClick={() => setTaskTab(tab)}
+                            className={`pb-2 capitalize shrink-0 transition relative ${
+                              taskTab === tab
+                                ? 'text-primary font-bold'
+                                : 'text-foreground/50 hover:text-foreground'
+                            }`}
+                          >
+                            {tab}
+                            {taskTab === tab && (
+                              <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Create Task input button */}
+                      {canCreateTasks && (
+                        <button
+                          onClick={() => setIsCreateTaskOpen(true)}
+                          className="flex items-center gap-1.5 text-xs text-foreground/60 hover:text-primary border border-border hover:border-primary/20 bg-background/50 hover:bg-primary/5 px-3 py-2 rounded-xl transition w-full justify-center"
+                        >
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Create task</span>
+                        </button>
+                      )}
+
+                      {/* Task Rows */}
+                      <div className="divide-y divide-border/60">
+                        {filteredTasks.length === 0 ? (
+                          <div className="py-12 text-center text-xs text-foreground/45 italic">
+                            No tasks found in this section
+                          </div>
+                        ) : (
+                          filteredTasks.map((task) => (
+                            <div
+                              key={task.id}
+                              className="py-3 flex items-center justify-between gap-3 text-xs group"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <button
+                                  onClick={() => toggleTaskCompletion(task)}
+                                  className={`h-5 w-5 rounded-full border flex items-center justify-center shrink-0 transition ${
+                                    task.status === 'COMPLETED'
+                                      ? 'border-emerald-500 bg-emerald-500/10 text-emerald-500'
+                                      : 'border-foreground/30 hover:border-foreground/60 text-transparent hover:text-foreground/40'
+                                  }`}
+                                >
+                                  <Check className="h-3 w-3" />
+                                </button>
+                                <span
+                                  className={`truncate ${
+                                    task.status === 'COMPLETED'
+                                      ? 'line-through text-foreground/40'
+                                      : 'text-foreground/80 font-semibold'
+                                  }`}
+                                >
+                                  {task.title}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {task.project && (
+                                  <span className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 text-[9px] rounded-md font-bold max-w-[100px] truncate">
+                                    {task.project.projectName}
+                                  </span>
+                                )}
+                                {task.dueDate && (
+                                  <span
+                                    className={`text-[10px] font-bold ${new Date(task.dueDate) < new Date() && task.status !== 'COMPLETED' ? 'text-danger bg-danger/10 px-1.5 py-0.5 rounded' : 'text-foreground/45'}`}
+                                  >
+                                    {formatTaskDate(task.dueDate)}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'projects') {
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Briefcase className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Create Project Card */}
+                      <button
+                        onClick={() => setIsCreateProjectOpen(true)}
+                        className={`flex flex-col items-center justify-center p-5 bg-card hover:bg-primary/5 border border-dashed border-border hover:border-primary/40 rounded-2xl text-foreground/55 hover:text-primary transition group h-36`}
                       >
-                        {task.project.projectName}
-                      </span>
-                    )}
+                        <div className="h-10 w-10 flex items-center justify-center rounded-xl bg-muted group-hover:bg-primary/10 group-hover:text-primary mb-3 transition">
+                          <Plus className="h-5 w-5" />
+                        </div>
+                        <span className="text-xs font-bold">New Project Setup</span>
+                      </button>
 
-                    {/* Due Date */}
-                    {task.dueDate && (
-                      <span className="text-xs text-zinc-400 font-medium">
-                        {formatTaskDate(task.startDate, task.dueDate)}
-                      </span>
-                    )}
+                      {/* Active Projects rendering */}
+                      {projects.slice(0, 5).map((p) => {
+                        const progress = p.progress || 0;
+
+                        return (
+                          <div
+                            key={p.id}
+                            onClick={() => navigate(`/projects/${p.id}`)}
+                            className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md cursor-pointer transition flex flex-col justify-between h-36 group"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center border border-primary/15 font-bold text-sm shrink-0">
+                                {p.projectName.charAt(0)}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <h4 className="font-bold text-foreground text-xs truncate leading-tight group-hover:text-primary transition-colors">
+                                  {p.projectName}
+                                </h4>
+                                <span className="text-[10px] text-foreground/45 uppercase tracking-wide block mt-1 font-mono">
+                                  Code: {p.projectCode}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="space-y-1.5 pt-2">
+                              <div className="flex justify-between text-[10px] font-bold text-foreground/60">
+                                <span>Project progress</span>
+                                <span>{progress}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-primary transition-all duration-300"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'meetings') {
+              const activeMeetings = meetings.filter((m) => new Date(m.startTime) >= new Date());
+
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Calendar className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
                   </div>
+                  {!widget.collapsed && (
+                    <div
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-3`}
+                    >
+                      {activeMeetings.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-foreground/45 italic">
+                          No upcoming client meetings scheduled
+                        </div>
+                      ) : (
+                        activeMeetings.map((m: Meeting) => (
+                          <div
+                            key={m.id}
+                            className="flex justify-between items-center p-3 rounded-xl border border-border/70 hover:border-primary/20 bg-background/30 hover:bg-background/80 transition text-xs"
+                          >
+                            <div className="space-y-0.5">
+                              <p className="font-bold text-foreground">{m.title}</p>
+                              <p className="text-[10px] text-foreground/45">
+                                {new Date(m.startTime).toLocaleString('en-US', {
+                                  month: 'short',
+                                  day: 'numeric',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </p>
+                            </div>
+                            {m.meetingLink && (
+                              <a
+                                href={m.meetingLink}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-white transition font-bold text-[10px]"
+                              >
+                                <Video className="h-3 w-3" /> Meet
+                              </a>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
-          </div>
-        </div>
+              );
+            }
 
-        {/* Right Column: Projects */}
-        <div
-          className={`bg-[#25272a] border border-[#323438] rounded-2xl shadow-xl overflow-hidden flex flex-col ${panelPadding} ${panelMinHeight}`}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="font-semibold text-lg text-white">Projects</span>
-              <button className="flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 font-medium px-2 py-1 bg-white/5 rounded-md transition">
-                <span>Recents</span>
-                <ChevronDown className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            <button className="p-1.5 text-zinc-400 hover:text-white hover:bg-white/5 rounded-lg transition">
-              <MoreHorizontal className="h-5 w-5" />
-            </button>
-          </div>
+            if (widget.id === 'team-productivity') {
+              // Summarize timesheets/logged hours per developer
+              const devWork = timeLogs.reduce((acc: Record<string, DeveloperProductivity>, log) => {
+                const authorId = log.user?.id;
+                if (!authorId) return acc;
+                if (!acc[authorId]) {
+                  const userName = log.user
+                    ? `${log.user.firstName} ${log.user.lastName}`
+                    : 'Unknown Member';
+                  acc[authorId] = {
+                    name: userName,
+                    hours: 0,
+                    status: 'Optimal',
+                  };
+                }
+                const currentDev = acc[authorId];
+                if (currentDev) {
+                  currentDev.hours += Number(log.duration || 0);
+                  currentDev.status = currentDev.hours > 40 ? 'Overloaded' : 'Optimal';
+                }
+                return acc;
+              }, {});
 
-          {/* Projects Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Create Project Card */}
-            <button
-              onClick={() => setIsCreateProjectOpen(true)}
-              className={`flex flex-col items-center justify-center ${dashboardDensity === 'compact' ? 'p-4' : 'p-6'} bg-transparent hover:bg-white/5 border border-dashed border-[#323438] hover:border-zinc-500 rounded-xl ${projectCardMinHeight} text-zinc-400 hover:text-zinc-200 transition group`}
-            >
-              <div className="h-10 w-10 flex items-center justify-center rounded-full border border-dashed border-[#323438] group-hover:border-zinc-500 mb-3 transition">
-                <Plus className="h-5 w-5" />
-              </div>
-              <span className="text-xs font-semibold">Create project</span>
-            </button>
+              const devList = Object.values(devWork);
 
-            {/* Existing Projects */}
-            {projects.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => navigate(`/projects/${p.id}`)}
-                className={`flex items-center gap-4 ${dashboardDensity === 'compact' ? 'p-4' : 'p-5'} bg-white/[0.02] hover:bg-white/[0.06] border border-[#323438] rounded-xl cursor-pointer transition ${projectCardMinHeight}`}
-              >
-                {/* Blue icon with concentric circles */}
-                <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${accent.solid} text-white shadow-md ${accent.shadow}`}
-                >
-                  <div className="h-6 w-6 rounded-full border-[2.5px] border-white flex items-center justify-center">
-                    <div className="h-2.5 w-2.5 rounded-full bg-white animate-pulse" />
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Award className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
                   </div>
+                  {!widget.collapsed && (
+                    <div className="bg-card border border-border rounded-2xl overflow-hidden shadow-sm text-xs">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-muted/40 border-b border-border text-foreground/50 font-bold">
+                            <th className="px-4 py-3">Member</th>
+                            <th className="px-4 py-3">Logged Hours</th>
+                            <th className="px-4 py-3">Workload Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/60">
+                          {devList.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={3}
+                                className="px-4 py-8 text-center text-foreground/45 italic"
+                              >
+                                No productivity logs available this week
+                              </td>
+                            </tr>
+                          ) : (
+                            devList.map((dev: DeveloperProductivity) => {
+                              const over = dev.hours > 40;
+                              return (
+                                <tr key={dev.name} className="hover:bg-muted/15 transition-colors">
+                                  <td className="px-4 py-3 font-semibold text-foreground">
+                                    {dev.name}
+                                  </td>
+                                  <td className="px-4 py-3 font-bold text-primary">
+                                    {dev.hours} hrs
+                                  </td>
+                                  <td className="px-4 py-3">
+                                    <span
+                                      className={`px-2 py-0.5 rounded text-[9px] font-bold ${over ? 'bg-danger/10 text-danger' : 'bg-emerald-500/10 text-emerald-600'}`}
+                                    >
+                                      {dev.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
+              );
+            }
 
-                <div className="min-w-0 flex-1">
-                  <h4 className="font-semibold text-white truncate text-sm" title={p.projectName}>
-                    {p.projectName}
-                  </h4>
-                  <p className="text-xs text-zinc-400 mt-1 font-medium">{getTasksDueSoon(p.id)}</p>
+            if (widget.id === 'project-status') {
+              const statusCounts = projects.reduce((acc: Record<string, number>, p) => {
+                acc[p.status] = (acc[p.status] || 0) + 1;
+                return acc;
+              }, {});
+
+              const statuses = [
+                'PLANNING',
+                'IN_PROGRESS',
+                'REVIEW',
+                'TESTING',
+                'COMPLETED',
+                'CANCELLED',
+              ];
+              const statusColors = {
+                PLANNING: 'bg-indigo-500',
+                IN_PROGRESS: 'bg-blue-500',
+                REVIEW: 'bg-purple-500',
+                TESTING: 'bg-amber-500',
+                COMPLETED: 'bg-emerald-500',
+                CANCELLED: 'bg-danger',
+              };
+
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Activity className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-4`}
+                    >
+                      <div className="h-4 w-full rounded-full bg-muted flex overflow-hidden">
+                        {statuses.map((status) => {
+                          const count = statusCounts[status] || 0;
+                          const percent = projects.length ? (count / projects.length) * 100 : 0;
+                          if (!percent) return null;
+                          return (
+                            <div
+                              key={status}
+                              className={statusColors[status as keyof typeof statusColors]}
+                              style={{ width: `${percent}%` }}
+                              title={`${status}: ${count}`}
+                            />
+                          );
+                        })}
+                      </div>
+
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-[10px] font-bold text-foreground/75">
+                        {statuses.map((status) => {
+                          const count = statusCounts[status] || 0;
+                          const color = statusColors[status as keyof typeof statusColors];
+                          return (
+                            <div key={status} className="flex items-center gap-1.5">
+                              <span className={`h-2.5 w-2.5 rounded-full ${color}`} />
+                              <span className="capitalize">
+                                {status.replace('_', ' ').toLowerCase()} ({count})
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
-          </div>
-        </div>
+              );
+            }
+
+            if (widget.id === 'activity') {
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Activity className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-4`}
+                    >
+                      <div className="relative border-l border-border pl-4 space-y-4 text-xs">
+                        {recentActivities.length === 0 ? (
+                          <div className="py-6 text-center text-foreground/45 italic">
+                            No activity recorded in this workspace.
+                          </div>
+                        ) : (
+                          recentActivities.map((act) => {
+                            let typeColor = 'bg-primary';
+                            if (act.type.includes('MILESTONE') || act.type.includes('TASK')) {
+                              typeColor = 'bg-emerald-500';
+                            } else if (
+                              act.type.includes('INVOICE') ||
+                              act.type.includes('PAYMENT')
+                            ) {
+                              typeColor = 'bg-purple-500';
+                            } else if (act.type.includes('DELETED')) {
+                              typeColor = 'bg-danger';
+                            }
+
+                            return (
+                              <div key={act.id} className="relative pl-1">
+                                <span
+                                  className={`absolute -left-[21px] top-0.5 ${typeColor} text-white h-3 w-3 rounded-full flex items-center justify-center border-2 border-card`}
+                                />
+                                <span className="font-semibold text-foreground">
+                                  {act.description}
+                                </span>
+                                <span className="text-[10px] text-foreground/45 block mt-0.5">
+                                  {act.projectName} • {getRelativeTime(act.createdAt)}
+                                </span>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'notifications') {
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Bell className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-3`}
+                    >
+                      <div className="flex gap-3 items-start border-b border-border/60 pb-2 text-xs">
+                        <div className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-bold text-foreground">
+                            Task approved by Project Manager
+                          </p>
+                          <span className="text-[10px] text-foreground/45 block mt-0.5">
+                            2 hours ago
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-3 items-start text-xs">
+                        <div className="h-6 w-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
+                          <AlertTriangle className="h-3.5 w-3.5" />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-bold text-foreground">
+                            Upcoming project milestone deadline approaching
+                          </p>
+                          <span className="text-[10px] text-foreground/45 block mt-0.5">
+                            5 hours ago
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return null;
+          })}
       </div>
 
-      {/* Modals integration */}
+      {/* Modals */}
       {canCreateTasks && (
         <CreateTaskModal
           isOpen={isCreateTaskOpen}

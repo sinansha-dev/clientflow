@@ -84,6 +84,15 @@ export const portalRepository = {
           take: 30,
           include: { user: { select: userSelect } },
         },
+        invoices: {
+          where: { deletedAt: null },
+          orderBy: { issueDate: 'desc' },
+          include: { payments: true },
+        },
+        quotations: {
+          where: { deletedAt: null },
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
   },

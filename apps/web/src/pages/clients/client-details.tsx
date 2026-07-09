@@ -143,6 +143,13 @@ export function ClientDetailsPage() {
         (sum, log) => sum + Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0),
         0,
       );
+
+  const revenueGenerated =
+    client.invoices?.reduce((sum, inv) => sum + (inv.amountPaid || 0), 0) || 0;
+  const outstandingBalance =
+    client.invoices
+      ?.filter((inv) => inv.status !== 'VOID')
+      .reduce((sum, inv) => sum + (inv.balanceDue || 0), 0) || 0;
   // --- Client Actions ---
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -366,45 +373,65 @@ export function ClientDetailsPage() {
             </p>
           </div>
         </div>
-        {isAdmin && (
-          <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {client.projects && client.projects.length > 0 && (
             <Button
-              variant="ghost"
-              onClick={handleArchiveRestoreClient}
-              className="flex items-center gap-2"
-            >
-              {client.status === 'ARCHIVED' ? (
-                <RotateCcw className="h-4 w-4" />
-              ) : (
-                <Archive className="h-4 w-4" />
-              )}
-              {client.status === 'ARCHIVED' ? 'Restore Client' : 'Archive Client'}
-            </Button>
-            <Button
-              variant="ghost"
               onClick={() => {
-                const primaryContact = client.contacts?.find((contact) => contact.primaryContact);
-                const [firstName = '', ...lastNameParts] = (primaryContact?.name ?? '').split(' ');
-                setPortalLoginForm({
-                  email: primaryContact?.email || client.email || '',
-                  password: '',
-                  firstName,
-                  lastName: lastNameParts.join(' '),
-                });
-                setShowPortalLoginForm(true);
+                const firstProj = client.projects?.[0];
+                if (firstProj) {
+                  localStorage.setItem('client-portal-project-id', firstProj.id);
+                  navigate('/portal');
+                }
               }}
-              className="flex items-center gap-2"
+              variant="ghost"
+              className="flex items-center gap-2 border border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs h-10 px-4 rounded-xl shadow-sm"
             >
-              <Shield className="h-4 w-4" /> Portal Login
+              <Shield className="h-4 w-4" /> Client Portal View
             </Button>
-            <Button
-              onClick={() => setIsEditingClient(!isEditingClient)}
-              className="flex items-center gap-2"
-            >
-              <Settings className="h-4 w-4" /> Edit Info
-            </Button>
-          </div>
-        )}
+          )}
+
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                onClick={handleArchiveRestoreClient}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+              >
+                {client.status === 'ARCHIVED' ? (
+                  <RotateCcw className="h-4 w-4" />
+                ) : (
+                  <Archive className="h-4 w-4" />
+                )}
+                {client.status === 'ARCHIVED' ? 'Restore Client' : 'Archive Client'}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  const primaryContact = client.contacts?.find((contact) => contact.primaryContact);
+                  const [firstName = '', ...lastNameParts] = (primaryContact?.name ?? '').split(
+                    ' ',
+                  );
+                  setPortalLoginForm({
+                    email: primaryContact?.email || client.email || '',
+                    password: '',
+                    firstName,
+                    lastName: lastNameParts.join(' '),
+                  });
+                  setShowPortalLoginForm(true);
+                }}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+              >
+                <Shield className="h-4 w-4" /> Portal Login
+              </Button>
+              <Button
+                onClick={() => setIsEditingClient(!isEditingClient)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+              >
+                <Settings className="h-4 w-4" /> Edit Info
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Tabs list */}
@@ -414,7 +441,7 @@ export function ClientDetailsPage() {
             { id: 'overview', label: 'Overview', icon: Building },
             { id: 'contacts', label: 'Contacts', icon: Users },
             { id: 'projects', label: 'Projects', icon: FolderKanban },
-            { id: 'invoices', label: 'Invoices', icon: FileText },
+            { id: 'invoices', label: 'Billing', icon: FileText },
             { id: 'files', label: 'Files', icon: Upload },
             { id: 'notes', label: 'Notes', icon: MessageSquare },
             { id: 'activity', label: 'Activity', icon: Clock },
@@ -588,7 +615,12 @@ export function ClientDetailsPage() {
                     <DollarSign className="h-5 w-5" />
                   </div>
                   <div>
-                    <span className="block text-2xl font-bold text-foreground">$0.00</span>
+                    <span className="block text-2xl font-bold text-foreground">
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: client.currency || 'USD',
+                      }).format(revenueGenerated)}
+                    </span>
                     <span className="text-xs text-foreground/50">Revenue Generated</span>
                   </div>
                 </div>
@@ -597,7 +629,12 @@ export function ClientDetailsPage() {
                     <DollarSign className="h-5 w-5" />
                   </div>
                   <div>
-                    <span className="block text-2xl font-bold text-foreground">$0.00</span>
+                    <span className="block text-2xl font-bold text-foreground">
+                      {new Intl.NumberFormat('en-US', {
+                        style: 'currency',
+                        currency: client.currency || 'USD',
+                      }).format(outstandingBalance)}
+                    </span>
                     <span className="text-xs text-foreground/50">Outstanding Balance</span>
                   </div>
                 </div>
@@ -950,52 +987,224 @@ export function ClientDetailsPage() {
           </Card>
         )}
 
-        {/* --- TAB CONTENT: INVOICES --- */}
+        {/* --- TAB CONTENT: BILLING --- */}
         {activeTab === 'invoices' && (
-          <Card className="p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
-                    <th className="px-6 py-4">Invoice Number</th>
-                    <th className="px-6 py-4">Project</th>
-                    <th className="px-6 py-4">Amount</th>
-                    <th className="px-6 py-4">Balance</th>
-                    <th className="px-6 py-4">Due Date</th>
-                    <th className="px-6 py-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {client.invoices?.length ? (
-                    client.invoices.map((invoice) => (
-                      <tr key={invoice.id} className="border-b border-border">
-                        <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
-                        <td className="px-6 py-4">
-                          {invoice.project?.projectName ?? 'No project'}
-                        </td>
-                        <td className="px-6 py-4">
-                          {invoice.currency} {invoice.total.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          {invoice.currency} {invoice.balanceDue.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          {new Date(invoice.dueDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-primary">{invoice.status}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={6} className="px-6 py-12 text-center text-foreground/45">
-                        No invoices found for this client.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+          <div className="grid gap-6">
+            {/* Aggregate Metric Cards */}
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="p-5 border border-border rounded-2xl bg-card">
+                <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                  Total Invoiced
+                </span>
+                <span className="text-xl font-bold mt-2 block text-primary">
+                  ${(client.invoices?.reduce((sum, i) => sum + i.total, 0) || 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-5 border border-border rounded-2xl bg-card">
+                <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                  Total Paid
+                </span>
+                <span className="text-xl font-bold mt-2 block text-emerald-600">
+                  $
+                  {(
+                    client.invoices?.reduce((sum, i) => sum + i.amountPaid, 0) || 0
+                  ).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-5 border border-border rounded-2xl bg-card">
+                <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                  Outstanding Balance
+                </span>
+                <span className="text-xl font-bold mt-2 block text-danger">
+                  $
+                  {(
+                    client.invoices?.reduce((sum, i) => sum + i.balanceDue, 0) || 0
+                  ).toLocaleString()}
+                </span>
+              </div>
             </div>
-          </Card>
+
+            {/* Quotations List */}
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-3">Quotations & Contracts</h3>
+              <Card className="p-0 overflow-hidden border border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                        <th className="px-6 py-4">Quote Number</th>
+                        <th className="px-6 py-4">Title</th>
+                        <th className="px-6 py-4">Amount</th>
+                        <th className="px-6 py-4">Valid Until</th>
+                        <th className="px-6 py-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {client.quotations?.length ? (
+                        client.quotations.map((quote) => (
+                          <tr
+                            key={quote.id}
+                            className="border-b border-border hover:bg-muted/5 transition"
+                          >
+                            <td className="px-6 py-4 font-bold">{quote.quoteNumber}</td>
+                            <td className="px-6 py-4 text-foreground/80">{quote.title}</td>
+                            <td className="px-6 py-4 font-bold">${quote.total.toLocaleString()}</td>
+                            <td className="px-6 py-4 text-foreground/60">
+                              {new Date(quote.validUntil).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  quote.status === 'ACCEPTED'
+                                    ? 'bg-emerald-500/10 text-emerald-600'
+                                    : 'bg-amber-500/10 text-amber-600'
+                                }`}
+                              >
+                                {quote.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="px-6 py-12 text-center text-foreground/45 italic"
+                          >
+                            No quotations logged for this client.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+
+            {/* Invoices List */}
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-3">Invoices History</h3>
+              <Card className="p-0 overflow-hidden border border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                        <th className="px-6 py-4">Invoice Number</th>
+                        <th className="px-6 py-4">Project</th>
+                        <th className="px-6 py-4">Amount</th>
+                        <th className="px-6 py-4">Balance</th>
+                        <th className="px-6 py-4">Due Date</th>
+                        <th className="px-6 py-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {client.invoices?.length ? (
+                        client.invoices.map((invoice) => (
+                          <tr
+                            key={invoice.id}
+                            className="border-b border-border hover:bg-muted/5 transition"
+                          >
+                            <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                            <td className="px-6 py-4">
+                              {invoice.project?.projectName ?? 'No project'}
+                            </td>
+                            <td className="px-6 py-4">
+                              {invoice.currency} {invoice.total.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              {invoice.currency} {invoice.balanceDue.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              {new Date(invoice.dueDate).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  invoice.status === 'PAID'
+                                    ? 'bg-emerald-500/10 text-emerald-600'
+                                    : 'bg-amber-500/10 text-amber-600'
+                                }`}
+                              >
+                                {invoice.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-6 py-12 text-center text-foreground/45 italic"
+                          >
+                            No invoices found for this client.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+
+            {/* Payments List */}
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-3">Recorded Payments History</h3>
+              <Card className="p-0 overflow-hidden border border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                        <th className="px-6 py-4">Invoice Reference</th>
+                        <th className="px-6 py-4">Method</th>
+                        <th className="px-6 py-4">Reference ID</th>
+                        <th className="px-6 py-4">Amount Paid</th>
+                        <th className="px-6 py-4">Payment Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {client.invoices?.some((i) => i.payments?.length) ? (
+                        client.invoices
+                          .flatMap((i) =>
+                            (i.payments || []).map((p) => ({
+                              ...p,
+                              invoiceNumber: i.invoiceNumber,
+                              currency: i.currency,
+                            })),
+                          )
+                          .map((p: any) => (
+                            <tr
+                              key={p.id}
+                              className="border-b border-border hover:bg-muted/5 transition"
+                            >
+                              <td className="px-6 py-4 font-bold">{p.invoiceNumber}</td>
+                              <td className="px-6 py-4 font-medium">{p.paymentMethod}</td>
+                              <td className="px-6 py-4 font-mono text-foreground/60">
+                                {p.referenceNumber || 'N/A'}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-emerald-600">
+                                ${p.amount.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 text-foreground/60">
+                                {new Date(p.paymentDate).toLocaleDateString()}
+                              </td>
+                            </tr>
+                          ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={5}
+                            className="px-6 py-12 text-center text-foreground/45 italic"
+                          >
+                            No payments logged for this client.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          </div>
         )}
 
         {/* --- TAB CONTENT: FILES --- */}

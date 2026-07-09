@@ -38,8 +38,10 @@ export const financeController = {
     return ok(res, 'Quotation approved successfully', data);
   },
 
-  async convertQuotationToProject(_req: Request, res: Response) {
-    return ok(res, 'Quotation is approved and ready to connect to a project');
+  async convertQuotationToProject(req: Request, res: Response) {
+    const data = await financeRepository.convertQuotationToProject(req.params.id!, req.user!.id);
+    if (!data) throw notFound('Quotation not found');
+    return ok(res, 'Quotation converted to project successfully', data, 201);
   },
 
   async convertQuotationToInvoice(req: Request, res: Response) {
@@ -136,5 +138,49 @@ export const financeController = {
   async report(_req: Request, res: Response) {
     const data = await financeRepository.financeReport();
     return ok(res, 'Finance report retrieved successfully', data);
+  },
+
+  // --- Billing Plans & Stages ---
+  async getBillingPlan(req: Request, res: Response) {
+    const data = await financeRepository.getBillingPlan(req.params.projectId!);
+    return ok(res, 'Billing plan retrieved successfully', data);
+  },
+
+  async createOrUpdateBillingPlan(req: Request, res: Response) {
+    const data = await financeRepository.createOrUpdateBillingPlan(req.params.projectId!, req.body);
+    return ok(res, 'Billing plan updated successfully', data);
+  },
+
+  async generateInvoiceForStage(req: Request, res: Response) {
+    const data = await financeRepository.generateInvoiceForStage(
+      req.params.projectId!,
+      req.params.stageId!,
+      req.user!.id,
+    );
+    return ok(res, 'Invoice generated successfully', data, 201);
+  },
+
+  // --- Recurring Services ---
+  async listRecurringServices(_req: Request, res: Response) {
+    const data = await financeRepository.listRecurringServices();
+    return ok(res, 'Recurring services retrieved successfully', data);
+  },
+
+  async createRecurringService(req: Request, res: Response) {
+    const data = await financeRepository.createRecurringService(req.body.projectId, req.body);
+    return ok(res, 'Recurring service created successfully', data, 201);
+  },
+
+  async updateRecurringServiceStatus(req: Request, res: Response) {
+    const data = await financeRepository.updateRecurringServiceStatus(
+      req.params.id!,
+      req.body.status,
+    );
+    return ok(res, 'Recurring service status updated successfully', data);
+  },
+
+  async triggerRecurringCron(req: Request, res: Response) {
+    const data = await financeRepository.triggerRecurringCron(req.user!.id);
+    return ok(res, 'Recurring services cron triggered successfully', data);
   },
 };

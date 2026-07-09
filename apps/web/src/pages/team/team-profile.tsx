@@ -12,17 +12,12 @@ import {
   Calendar,
   Clock,
   Compass,
-  FileText,
   Mail,
   Shield,
-  User,
-  Activity,
-  Plus,
   Tag,
   Clock3,
   Award,
   Video,
-  CheckCircle,
 } from 'lucide-react';
 
 interface TeamMemberDetail {
@@ -122,6 +117,7 @@ export function TeamProfilePage() {
   const isAdmin = currentUser?.role === 'ADMIN';
   const memberTimeLogs = member.timeLogs ?? [];
   const canEdit = isAdmin || isSelf;
+  const currentTab = canEdit ? activeTab : 'overview';
 
   const handleProfileSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -171,14 +167,6 @@ export function TeamProfilePage() {
       notify({ type: 'error', title: 'Password reset failed', message: errorMessage(err) });
     }
   };
-
-  // Determine workload indicators
-  const tasksDueToday = member.assignedTasks?.filter((t) => {
-    if (!t.dueDate || t.status === 'COMPLETED') return false;
-    const due = new Date(t.dueDate).toISOString().split('T')[0];
-    const today = new Date().toISOString().split('T')[0];
-    return due === today;
-  }).length;
 
   const isOverloaded =
     member.assignedTasks?.filter((t) => t.status !== 'COMPLETED').length > 8 ||
@@ -377,124 +365,156 @@ export function TeamProfilePage() {
             { id: 'meetings', label: 'Meetings', icon: Calendar },
             { id: 'performance', label: 'Performance', icon: Award },
           ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 py-3 border-b-2 font-bold px-1 transition shrink-0 ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-foreground/50 hover:text-foreground'
-            }`}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+        )
+          .filter((tab) => canEdit || tab.id === 'overview')
+          .map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 py-3 border-b-2 font-bold px-1 transition shrink-0 ${
+                currentTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-foreground/50 hover:text-foreground'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
       </div>
 
       {/* Tab Workspaces */}
       <div className="grid gap-6">
         {/* OVERVIEW TAB */}
-        {activeTab === 'overview' && (
+        {currentTab === 'overview' && (
           <div className="grid gap-6 md:grid-cols-3">
-            {/* Left Card: Workload & Overload status */}
-            <Card className="md:col-span-2 flex flex-col gap-4">
-              <h3 className="text-sm font-bold flex justify-between items-center">
-                Workload capacity
-                {isOverloaded && (
-                  <span className="text-[10px] font-bold bg-danger/10 text-danger px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                    Overloaded
-                  </span>
-                )}
-              </h3>
+            {canEdit ? (
+              <>
+                {/* Left Card: Workload & Overload status */}
+                <Card className="md:col-span-2 flex flex-col gap-4">
+                  <h3 className="text-sm font-bold flex justify-between items-center">
+                    Workload capacity
+                    {isOverloaded && (
+                      <span className="text-[10px] font-bold bg-danger/10 text-danger px-2.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                        Overloaded
+                      </span>
+                    )}
+                  </h3>
 
-              <div className="grid gap-4 sm:grid-cols-2 text-xs">
-                <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
-                  <span className="text-foreground/50 block font-bold">Current Projects</span>
-                  <span className="text-2xl font-bold block mt-1">
-                    {member.projectTeams?.length}
-                  </span>
-                </div>
-                <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
-                  <span className="text-foreground/50 block font-bold">Active Issues</span>
-                  <span className="text-2xl font-bold block mt-1">
-                    {member.assignedTasks?.filter((t) => t.status !== 'COMPLETED').length}
-                  </span>
-                </div>
-                <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
-                  <span className="text-foreground/50 block font-bold">Hours Tracked (Weekly)</span>
-                  <span className="text-2xl font-bold block mt-1">
-                    {member.metrics.weeklyHours} hrs
-                  </span>
-                </div>
-                <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
-                  <span className="text-foreground/50 block font-bold">Utilization Rate</span>
-                  <span className="text-2xl font-bold block mt-1">
-                    {member.metrics.utilization}%
-                  </span>
-                </div>
-              </div>
-
-              {/* Progress bars visualizer */}
-              <div className="space-y-4 pt-2">
-                <div>
-                  <div className="flex justify-between text-xs mb-1.5 font-bold">
-                    <span>Weekly Target Hours (Capacity 40h)</span>
-                    <span>{Math.round((member.metrics.weeklyHours / 40) * 100)}%</span>
+                  <div className="grid gap-4 sm:grid-cols-2 text-xs">
+                    <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
+                      <span className="text-foreground/50 block font-bold">Current Projects</span>
+                      <span className="text-2xl font-bold block mt-1">
+                        {member.projectTeams?.length}
+                      </span>
+                    </div>
+                    <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
+                      <span className="text-foreground/50 block font-bold">Active Issues</span>
+                      <span className="text-2xl font-bold block mt-1">
+                        {member.assignedTasks?.filter((t) => t.status !== 'COMPLETED').length}
+                      </span>
+                    </div>
+                    <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
+                      <span className="text-foreground/50 block font-bold">
+                        Hours Tracked (Weekly)
+                      </span>
+                      <span className="text-2xl font-bold block mt-1">
+                        {member.metrics.weeklyHours} hrs
+                      </span>
+                    </div>
+                    <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
+                      <span className="text-foreground/50 block font-bold">Utilization Rate</span>
+                      <span className="text-2xl font-bold block mt-1">
+                        {member.metrics.utilization}%
+                      </span>
+                    </div>
                   </div>
-                  <div className="h-2 w-full rounded-full bg-border overflow-hidden">
-                    <div
-                      className={`h-full ${member.metrics.weeklyHours > 40 ? 'bg-danger' : 'bg-primary'}`}
-                      style={{
-                        width: `${Math.min(100, (member.metrics.weeklyHours / 40) * 100)}%`,
-                      }}
-                    />
+
+                  {/* Progress bars visualizer */}
+                  <div className="space-y-4 pt-2">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1.5 font-bold">
+                        <span>Weekly Target Hours (Capacity 40h)</span>
+                        <span>{Math.round((member.metrics.weeklyHours / 40) * 100)}%</span>
+                      </div>
+                      <div className="h-2 w-full rounded-full bg-border overflow-hidden">
+                        <div
+                          className={`h-full ${member.metrics.weeklyHours > 40 ? 'bg-danger' : 'bg-primary'}`}
+                          style={{
+                            width: `${Math.min(100, (member.metrics.weeklyHours / 40) * 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
                   </div>
+                </Card>
+
+                {/* Right Card: Skills profile */}
+                <Card className="flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-sm font-bold flex items-center gap-1">
+                      <Tag className="h-4.5 w-4.5 text-primary" /> Skills Tags
+                    </h3>
+                    {canEdit && (
+                      <button
+                        onClick={() => setEditingSkills(!editingSkills)}
+                        className="text-xs text-primary hover:underline font-bold"
+                      >
+                        Edit
+                      </button>
+                    )}
+                  </div>
+
+                  {editingSkills ? (
+                    <form onSubmit={handleSkillsSubmit} className="space-y-2">
+                      <input
+                        type="text"
+                        value={skillsInput}
+                        onChange={(e) => setSkillsInput(e.target.value)}
+                        placeholder="React, Node.js, Express"
+                        className="w-full h-10 rounded border border-border bg-background px-3 text-xs outline-none"
+                      />
+                      <div className="flex gap-1.5 justify-end">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-8 text-xs"
+                          onClick={() => setEditingSkills(false)}
+                        >
+                          Cancel
+                        </Button>
+                        <Button type="submit" className="h-8 text-xs">
+                          Save
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {member.skills?.length === 0 ? (
+                        <span className="text-xs text-foreground/45 italic">
+                          No skills catalogued
+                        </span>
+                      ) : (
+                        member.skills?.map((sk) => (
+                          <span
+                            key={sk}
+                            className="bg-muted px-2.5 py-1 rounded text-xs font-semibold text-foreground/75 border border-border/40"
+                          >
+                            {sk}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </Card>
+              </>
+            ) : (
+              <Card className="md:col-span-3 flex flex-col gap-4">
+                <div className="flex justify-between items-center">
+                  <h3 className="text-sm font-bold flex items-center gap-1">
+                    <Tag className="h-4.5 w-4.5 text-primary" /> Skills Tags
+                  </h3>
                 </div>
-              </div>
-            </Card>
-
-            {/* Right Card: Skills profile */}
-            <Card className="flex flex-col gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-sm font-bold flex items-center gap-1">
-                  <Tag className="h-4.5 w-4.5 text-primary" /> Skills Tags
-                </h3>
-                {canEdit && (
-                  <button
-                    onClick={() => setEditingSkills(!editingSkills)}
-                    className="text-xs text-primary hover:underline font-bold"
-                  >
-                    Edit
-                  </button>
-                )}
-              </div>
-
-              {editingSkills ? (
-                <form onSubmit={handleSkillsSubmit} className="space-y-2">
-                  <input
-                    type="text"
-                    value={skillsInput}
-                    onChange={(e) => setSkillsInput(e.target.value)}
-                    placeholder="React, Node.js, Express"
-                    className="w-full h-10 rounded border border-border bg-background px-3 text-xs outline-none"
-                  />
-                  <div className="flex gap-1.5 justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-8 text-xs"
-                      onClick={() => setEditingSkills(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" className="h-8 text-xs">
-                      Save
-                    </Button>
-                  </div>
-                </form>
-              ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {member.skills?.length === 0 ? (
                     <span className="text-xs text-foreground/45 italic">No skills catalogued</span>
@@ -509,13 +529,13 @@ export function TeamProfilePage() {
                     ))
                   )}
                 </div>
-              )}
-            </Card>
+              </Card>
+            )}
           </div>
         )}
 
         {/* PROJECTS TAB */}
-        {activeTab === 'projects' && (
+        {currentTab === 'projects' && (
           <div className="grid gap-3 sm:grid-cols-2">
             {member.projectTeams?.length === 0 ? (
               <Card className="col-span-full py-12 text-center text-foreground/40 italic">
@@ -545,7 +565,7 @@ export function TeamProfilePage() {
         )}
 
         {/* TASKS TAB */}
-        {activeTab === 'tasks' && (
+        {currentTab === 'tasks' && (
           <div className="grid gap-3">
             {member.assignedTasks?.length === 0 ? (
               <Card className="py-12 text-center text-foreground/40 italic">
@@ -575,7 +595,7 @@ export function TeamProfilePage() {
         )}
 
         {/* TIME LOGS TAB */}
-        {activeTab === 'timelogs' && (
+        {currentTab === 'timelogs' && (
           <Card className="p-0 overflow-hidden text-xs">
             <table className="w-full text-left">
               <thead>
@@ -638,7 +658,7 @@ export function TeamProfilePage() {
         )}
 
         {/* MEETINGS TAB */}
-        {activeTab === 'meetings' && (
+        {currentTab === 'meetings' && (
           <div className="grid gap-3">
             {member.meetingsAttending?.length === 0 ? (
               <Card className="py-12 text-center text-foreground/40 italic">
@@ -682,7 +702,7 @@ export function TeamProfilePage() {
         )}
 
         {/* PERFORMANCE TAB */}
-        {activeTab === 'performance' && (
+        {currentTab === 'performance' && (
           <Card className="grid gap-6 sm:grid-cols-3 text-center text-xs">
             <div className="p-4 bg-muted/10 border rounded-lg">
               <span className="block font-bold text-foreground/50 mb-1">Time Logs Status</span>

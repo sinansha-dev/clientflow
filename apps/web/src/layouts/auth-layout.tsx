@@ -4,7 +4,14 @@ export function AuthLayout() {
   return (
     <main className="grid min-h-screen bg-background lg:grid-cols-[0.95fr_1.05fr]">
       <section className="hidden border-r border-border bg-card px-12 py-10 lg:flex lg:flex-col lg:justify-between">
-        <div className="text-xl font-bold text-primary">ClientFlow</div>
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/icon.jpg"
+            alt="ClientFlow Logo"
+            className="h-8 w-8 rounded-lg shadow-sm border border-border/10"
+          />
+          <span className="text-xl font-bold text-foreground">ClientFlow</span>
+        </div>
         <div className="max-w-md">
           <p className="text-4xl font-semibold leading-tight">
             Agency operations, calmly organized.

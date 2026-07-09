@@ -130,6 +130,8 @@ export interface Project {
   invoices?: Invoice[];
   quotations?: Quotation[];
   expenses?: Expense[];
+  billingPlan?: BillingPlan | null;
+  recurringServices?: RecurringService[];
 }
 
 export interface ProjectTeam {
@@ -412,6 +414,8 @@ export interface Invoice {
   deletedAt?: string | Date | null;
   items?: InvoiceItem[];
   payments?: Payment[];
+  billingStageId?: string | null;
+  billingStage?: BillingStage | null;
 }
 
 export interface Payment {
@@ -454,4 +458,49 @@ export interface FinanceSummary {
   profit: number;
   draftQuotes: number;
   openInvoices: number;
+}
+
+export type BillingPlanType =
+  'FULL_PAYMENT' | 'ADVANCE_BALANCE' | 'MILESTONE' | 'MONTHLY_RETAINER' | 'AMC' | 'CUSTOM';
+
+export type RecurringServiceInterval = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY';
+export type RecurringServiceStatus = 'ACTIVE' | 'PAUSED' | 'CANCELLED';
+
+export interface BillingPlan {
+  id: string;
+  projectId: string;
+  project?: Project;
+  billingType: BillingPlanType;
+  totalAmount: number;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  stages?: BillingStage[];
+}
+
+export interface BillingStage {
+  id: string;
+  billingPlanId: string;
+  billingPlan?: BillingPlan;
+  name: string;
+  amount: number;
+  dueDate?: string | Date | null;
+  status: string; // 'PENDING', 'INVOICED', 'PAID'
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  invoice?: Invoice | null;
+}
+
+export interface RecurringService {
+  id: string;
+  projectId: string;
+  project?: Project;
+  name: string;
+  amount: number;
+  interval: RecurringServiceInterval;
+  status: RecurringServiceStatus;
+  startDate: string | Date;
+  nextInvoiceDate: string | Date;
+  lastInvoicedDate?: string | Date | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }

@@ -243,6 +243,8 @@ model Project {
   quotations           Quotation[]
   invoices             Invoice[]
   expenses             Expense[]
+  billingPlan          BillingPlan?
+  recurringServices    RecurringService[]
   @@index([clientId])
   @@index([projectManagerId])
   @@index([status])
@@ -768,6 +770,8 @@ model Invoice {
   deletedAt     DateTime?
   items         InvoiceItem[]
   payments      Payment[]
+  billingStageId String?      @unique @db.Uuid
+  billingStage   BillingStage? @relation(fields: [billingStageId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
   @@index([projectId])
@@ -830,5 +834,70 @@ model Expense {
   @@index([recordedBy])
   @@index([expenseDate])
   @@index([deletedAt])
+}
+
+enum BillingPlanType {
+  FULL_PAYMENT
+  ADVANCE_BALANCE
+  MILESTONE
+  MONTHLY_RETAINER
+  AMC
+  CUSTOM
+}
+
+enum RecurringServiceInterval {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+enum RecurringServiceStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+model BillingPlan {
+  id          String          @id @default(uuid()) @db.Uuid
+  projectId   String          @unique @db.Uuid
+  project     Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  billingType BillingPlanType
+  totalAmount Float           @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  stages      BillingStage[]
+}
+
+model BillingStage {
+  id            String      @id @default(uuid()) @db.Uuid
+  billingPlanId String      @db.Uuid
+  billingPlan   BillingPlan @relation(fields: [billingPlanId], references: [id], onDelete: Cascade)
+  name          String
+  amount        Float
+  dueDate       DateTime?
+  status        String      @default("PENDING")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  invoice       Invoice?
+}
+
+model RecurringService {
+  id               String                   @id @default(uuid()) @db.Uuid
+  projectId        String                   @db.Uuid
+  project          Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name             String
+  amount           Float
+  interval         RecurringServiceInterval
+  status           RecurringServiceStatus   @default(ACTIVE)
+  startDate        DateTime
+  nextInvoiceDate  DateTime
+  lastInvoicedDate DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  @@index([projectId])
 }
 

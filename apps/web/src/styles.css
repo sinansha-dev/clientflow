@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --primary: 221 83% 53%;
-  --secondary: 170 65% 37%;
+  --primary: 217 91% 56%;
+  --secondary: 239 84% 67%;
+  --accent: 271 91% 65%;
   --success: 142 72% 29%;
   --warning: 38 92% 50%;
   --danger: 0 72% 51%;
@@ -12,20 +13,21 @@
   --foreground: 222 47% 11%;
   --muted: 215 20% 90%;
   --card: 0 0% 100%;
-  --border: 214 32% 88%;
+  --border: 214 32% 91%;
 }
 
 .dark {
-  --primary: 204 90% 60%;
-  --secondary: 160 64% 45%;
+  --primary: 217 91% 60%;
+  --secondary: 239 84% 72%;
+  --accent: 271 91% 70%;
   --success: 152 69% 45%;
   --warning: 38 92% 50%;
   --danger: 0 84% 60%;
-  --background: 168 8% 7%;
-  --foreground: 180 9% 96%;
-  --muted: 220 4% 21%;
-  --card: 220 6% 15%;
-  --border: 220 5% 22%;
+  --background: 222 47% 6%;
+  --foreground: 210 40% 98%;
+  --muted: 222 47% 14%;
+  --card: 222 47% 9%;
+  --border: 222 47% 15%;
 }
 
 /* Custom premium card shadow */

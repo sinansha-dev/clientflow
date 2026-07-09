@@ -179,3 +179,32 @@ financeReportRoutes.get('/profit', (req, res, next) =>
 financeReportRoutes.get('/revenue', (req, res, next) =>
   financeController.report(req, res).catch(next),
 );
+
+export const billingPlanRoutes = Router();
+billingPlanRoutes.use(requireAuth);
+billingPlanRoutes.get('/:projectId', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+  financeController.getBillingPlan(req, res).catch(next),
+);
+billingPlanRoutes.post('/:projectId', requireRole('ADMIN'), (req, res, next) =>
+  financeController.createOrUpdateBillingPlan(req, res).catch(next),
+);
+billingPlanRoutes.post(
+  '/:projectId/stages/:stageId/generate-invoice',
+  requireRole('ADMIN'),
+  (req, res, next) => financeController.generateInvoiceForStage(req, res).catch(next),
+);
+
+export const recurringServiceRoutes = Router();
+recurringServiceRoutes.use(requireAuth);
+recurringServiceRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+  financeController.listRecurringServices(req, res).catch(next),
+);
+recurringServiceRoutes.post('/', requireRole('ADMIN'), (req, res, next) =>
+  financeController.createRecurringService(req, res).catch(next),
+);
+recurringServiceRoutes.patch('/:id/status', requireRole('ADMIN'), (req, res, next) =>
+  financeController.updateRecurringServiceStatus(req, res).catch(next),
+);
+recurringServiceRoutes.post('/trigger-cron', requireRole('ADMIN'), (req, res, next) =>
+  financeController.triggerRecurringCron(req, res).catch(next),
+);

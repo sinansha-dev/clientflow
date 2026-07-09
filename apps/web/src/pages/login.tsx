@@ -42,9 +42,14 @@ export function LoginPage() {
 
   return (
     <Card className="w-full max-w-md">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold">Sign in</h1>
-        <p className="mt-2 text-sm text-foreground/65">Use your ClientFlow account to continue.</p>
+      <div className="mb-6 flex flex-col items-center text-center">
+        <img
+          src="/icon.jpg"
+          alt="ClientFlow Logo"
+          className="h-16 w-16 rounded-2xl mb-4 shadow-lg shadow-primary/5 border border-border/10"
+        />
+        <h1 className="text-2xl font-bold text-foreground">Sign in to ClientFlow</h1>
+        <p className="mt-2 text-sm text-muted-foreground">Use your account to continue</p>
       </div>
       <form className="grid gap-4" onSubmit={onSubmit}>
         <Input

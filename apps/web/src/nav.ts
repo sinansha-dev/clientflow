@@ -29,7 +29,7 @@ export const navItems: NavItem[] = [
     label: 'Client Portal',
     href: '/portal',
     icon: ShieldCheck,
-    roles: ['ADMIN', 'DEVELOPER', 'CLIENT'],
+    roles: ['CLIENT'],
   },
   { label: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['ADMIN', 'DEVELOPER'] },
   { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'DEVELOPER'] },

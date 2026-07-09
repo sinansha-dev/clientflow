@@ -11,6 +11,7 @@ export default {
         foreground: 'hsl(var(--foreground))',
         primary: 'hsl(var(--primary))',
         secondary: 'hsl(var(--secondary))',
+        accent: 'hsl(var(--accent))',
         success: 'hsl(var(--success))',
         warning: 'hsl(var(--warning))',
         danger: 'hsl(var(--danger))',
@@ -18,9 +19,10 @@ export default {
         card: 'hsl(var(--card))',
       },
       borderRadius: {
-        sm: '4px',
-        md: '6px',
-        lg: '8px',
+        sm: '6px',
+        md: '12px',
+        lg: '16px',
+        xl: '24px',
       },
       fontFamily: {
         sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],

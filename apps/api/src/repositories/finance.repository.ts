@@ -34,8 +34,33 @@ function totals(items: LineItemInput[] = [], discount = 0) {
 
 async function nextNumber(prefix: 'QTN' | 'INV') {
   const year = new Date().getFullYear();
-  const count = prefix === 'QTN' ? await prisma.quotation.count() : await prisma.invoice.count();
-  return `${prefix}-${year}-${String(count + 1).padStart(4, '0')}`;
+  const prefixPattern = `${prefix}-${year}-`;
+
+  if (prefix === 'QTN') {
+    const latest = await prisma.quotation.findFirst({
+      where: { quoteNumber: { startsWith: prefixPattern } },
+      orderBy: { quoteNumber: 'desc' },
+    });
+    if (!latest) {
+      return `${prefixPattern}0001`;
+    }
+    const lastNumStr = latest.quoteNumber.replace(prefixPattern, '');
+    const lastNum = parseInt(lastNumStr, 10);
+    const nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+    return `${prefixPattern}${String(nextNum).padStart(4, '0')}`;
+  } else {
+    const latest = await prisma.invoice.findFirst({
+      where: { invoiceNumber: { startsWith: prefixPattern } },
+      orderBy: { invoiceNumber: 'desc' },
+    });
+    if (!latest) {
+      return `${prefixPattern}0001`;
+    }
+    const lastNumStr = latest.invoiceNumber.replace(prefixPattern, '');
+    const lastNum = parseInt(lastNumStr, 10);
+    const nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
+    return `${prefixPattern}${String(nextNum).padStart(4, '0')}`;
+  }
 }
 
 async function clientIdsForUser(user: FinanceUser) {
@@ -427,5 +452,324 @@ export const financeRepository = {
       openInvoices: invoices.filter((invoice) => !['PAID', 'CANCELLED'].includes(invoice.status))
         .length,
     };
+  },
+
+  // --- Billing Plans & Stages ---
+  async getBillingPlan(projectId: string) {
+    return prisma.billingPlan.findUnique({
+      where: { projectId },
+      include: {
+        stages: {
+          include: {
+            invoice: true,
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+  },
+
+  async createOrUpdateBillingPlan(projectId: string, data: any) {
+    const { billingType, totalAmount, stages } = data;
+
+    const plan = await prisma.billingPlan.upsert({
+      where: { projectId },
+      create: {
+        projectId,
+        billingType,
+        totalAmount: Number(totalAmount),
+      },
+      update: {
+        billingType,
+        totalAmount: Number(totalAmount),
+      },
+    });
+
+    const existingStages = await prisma.billingStage.findMany({
+      where: { billingPlanId: plan.id },
+      include: { invoice: true },
+    });
+
+    const activeStageIds = stages.map((s: any) => s.id).filter(Boolean);
+    const stagesToDelete = existingStages.filter(
+      (es) => !activeStageIds.includes(es.id) && !es.invoice,
+    );
+
+    if (stagesToDelete.length > 0) {
+      await prisma.billingStage.deleteMany({
+        where: { id: { in: stagesToDelete.map((s) => s.id) } },
+      });
+    }
+
+    for (const stage of stages) {
+      const stageAmount = Number(stage.amount);
+      if (stage.id) {
+        const es = existingStages.find((x) => x.id === stage.id);
+        if (es && !es.invoice) {
+          await prisma.billingStage.update({
+            where: { id: stage.id },
+            data: {
+              name: stage.name,
+              amount: stageAmount,
+              dueDate: stage.dueDate ? new Date(stage.dueDate) : null,
+              status: stage.status || 'PENDING',
+            },
+          });
+        } else if (es) {
+          await prisma.billingStage.update({
+            where: { id: stage.id },
+            data: {
+              name: stage.name,
+              dueDate: stage.dueDate ? new Date(stage.dueDate) : null,
+            },
+          });
+        }
+      } else {
+        await prisma.billingStage.create({
+          data: {
+            billingPlanId: plan.id,
+            name: stage.name,
+            amount: stageAmount,
+            dueDate: stage.dueDate ? new Date(stage.dueDate) : null,
+            status: 'PENDING',
+          },
+        });
+      }
+    }
+
+    return this.getBillingPlan(projectId);
+  },
+
+  async generateInvoiceForStage(projectId: string, stageId: string, userId: string) {
+    const stage = await prisma.billingStage.findUnique({
+      where: { id: stageId },
+      include: { invoice: true, billingPlan: { include: { project: true } } },
+    });
+
+    if (!stage) throw new Error('Billing stage not found');
+    if (stage.invoice) return stage.invoice;
+
+    const project = stage.billingPlan.project;
+    const client = await prisma.client.findUnique({ where: { id: project.clientId } });
+    if (!client) throw new Error('Client not found');
+
+    const due = new Date();
+    due.setDate(due.getDate() + 30);
+
+    const invoice = await prisma.invoice.create({
+      data: {
+        invoiceNumber: await nextNumber('INV'),
+        clientId: project.clientId,
+        projectId: project.id,
+        billingStageId: stage.id,
+        issueDate: new Date(),
+        dueDate: due,
+        status: 'DRAFT',
+        currency: client.currency,
+        subtotal: stage.amount,
+        tax: 0,
+        discount: 0,
+        total: stage.amount,
+        balanceDue: stage.amount,
+        notes: `Invoice generated for billing stage: ${stage.name}`,
+        createdBy: userId,
+        items: {
+          create: [
+            {
+              name: stage.name,
+              description: `Project billing milestone for ${project.projectName}`,
+              quantity: 1,
+              unitPrice: stage.amount,
+              taxRate: 0,
+              total: stage.amount,
+            },
+          ],
+        },
+      },
+    });
+
+    await prisma.billingStage.update({
+      where: { id: stageId },
+      data: { status: 'INVOICED' },
+    });
+
+    return invoice;
+  },
+
+  // --- Recurring Services ---
+  async listRecurringServices() {
+    return prisma.recurringService.findMany({
+      include: {
+        project: {
+          include: {
+            client: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  async createRecurringService(projectId: string, data: any) {
+    const { name, amount, interval, startDate } = data;
+    const start = new Date(startDate);
+
+    return prisma.recurringService.create({
+      data: {
+        projectId,
+        name,
+        amount: Number(amount),
+        interval,
+        startDate: start,
+        nextInvoiceDate: start,
+        status: 'ACTIVE',
+      },
+    });
+  },
+
+  async updateRecurringServiceStatus(id: string, status: any) {
+    return prisma.recurringService.update({
+      where: { id },
+      data: { status },
+    });
+  },
+
+  async triggerRecurringCron(userId: string) {
+    const now = new Date();
+
+    const services = await prisma.recurringService.findMany({
+      where: {
+        status: 'ACTIVE',
+        nextInvoiceDate: { lte: now },
+      },
+      include: {
+        project: {
+          include: {
+            client: true,
+          },
+        },
+      },
+    });
+
+    const generatedInvoices = [];
+
+    for (const service of services) {
+      const project = service.project;
+      const client = project.client;
+
+      const due = new Date();
+      due.setDate(due.getDate() + 30);
+
+      const invoice = await prisma.invoice.create({
+        data: {
+          invoiceNumber: await nextNumber('INV'),
+          clientId: project.clientId,
+          projectId: project.id,
+          issueDate: now,
+          dueDate: due,
+          status: 'DRAFT',
+          currency: client.currency,
+          subtotal: service.amount,
+          tax: 0,
+          discount: 0,
+          total: service.amount,
+          balanceDue: service.amount,
+          notes: `Automatic invoice generated for recurring service: ${service.name}`,
+          createdBy: userId,
+          items: {
+            create: [
+              {
+                name: service.name,
+                description: `Recurring billing cycle renewal`,
+                quantity: 1,
+                unitPrice: service.amount,
+                taxRate: 0,
+                total: service.amount,
+              },
+            ],
+          },
+        },
+      });
+
+      const nextDate = new Date(service.nextInvoiceDate);
+      if (service.interval === 'DAILY') {
+        nextDate.setDate(nextDate.getDate() + 1);
+      } else if (service.interval === 'WEEKLY') {
+        nextDate.setDate(nextDate.getDate() + 7);
+      } else if (service.interval === 'MONTHLY') {
+        nextDate.setMonth(nextDate.getMonth() + 1);
+      } else if (service.interval === 'YEARLY') {
+        nextDate.setFullYear(nextDate.getFullYear() + 1);
+      }
+
+      await prisma.recurringService.update({
+        where: { id: service.id },
+        data: {
+          lastInvoicedDate: now,
+          nextInvoiceDate: nextDate,
+        },
+      });
+
+      generatedInvoices.push(invoice);
+    }
+
+    return generatedInvoices;
+  },
+
+  // --- Quotation approved project conversion ---
+  async convertQuotationToProject(id: string, userId: string) {
+    const quote = await prisma.quotation.findFirst({
+      where: { id, deletedAt: null },
+      include: { client: true },
+    });
+
+    if (!quote) throw new Error('Quotation not found');
+    if (quote.projectId) {
+      return prisma.project.findUnique({ where: { id: quote.projectId } });
+    }
+
+    const count = await prisma.project.count();
+    const projectCode = `PRJ-${String(count + 1).padStart(4, '0')}`;
+
+    const now = new Date();
+    const deadline = new Date();
+    deadline.setDate(deadline.getDate() + 90);
+
+    return prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          projectName: quote.title,
+          projectCode,
+          description: quote.description || 'Project created from quotation',
+          status: 'PLANNING',
+          priority: 'MEDIUM',
+          budget: quote.total,
+          estimatedHours: 100,
+          startDate: now,
+          deadline,
+          clientId: quote.clientId,
+          projectManagerId: userId,
+          createdBy: userId,
+        },
+      });
+
+      await tx.quotation.update({
+        where: { id },
+        data: {
+          projectId: project.id,
+          status: 'ACCEPTED',
+        },
+      });
+
+      await tx.billingPlan.create({
+        data: {
+          projectId: project.id,
+          billingType: 'CUSTOM',
+          totalAmount: quote.total,
+        },
+      });
+
+      return project;
+    });
   },
 };

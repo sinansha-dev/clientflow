@@ -30,6 +30,7 @@ import {
   Video,
   RotateCcw,
   FolderOpen,
+  Check,
 } from 'lucide-react';
 
 type ProjectTab =
@@ -40,6 +41,7 @@ type ProjectTab =
   | 'meetings'
   | 'timelogs'
   | 'invoices'
+  | 'billing'
   | 'deployments'
   | 'notes'
   | 'activity';
@@ -101,6 +103,8 @@ export function ProjectDetailsPage() {
     version: '1.0.0',
   });
 
+  const [billingPlan, setBillingPlan] = useState<any>(null);
+
   const linkedMeetings = project?.meetingsLinked ?? [];
   const legacyMeetings = project?.meetings ?? [];
   const timeLogs = project?.timeLogs ?? [];
@@ -138,6 +142,12 @@ export function ProjectDetailsPage() {
       setProject(response.data.data);
       if (response.data.data) {
         setEditForm(response.data.data);
+      }
+
+      // Fetch billing plan
+      const bpRes = await api.get(`/billing-plans/${id}`).catch(() => null);
+      if (bpRes) {
+        setBillingPlan(bpRes.data.data);
       }
     } catch (err) {
       notify({
@@ -432,28 +442,43 @@ export function ProjectDetailsPage() {
           </div>
         </div>
 
-        {isAdmin && (
-          <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {project && (
             <Button
+              onClick={() => {
+                localStorage.setItem('client-portal-project-id', project.id);
+                navigate('/portal');
+              }}
               variant="ghost"
-              onClick={handleArchiveRestore}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 border border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary font-bold text-xs h-10 px-4 rounded-xl shadow-sm"
             >
-              {project.status === 'COMPLETED' ? (
-                <RotateCcw className="h-4 w-4" />
-              ) : (
-                <Clock className="h-4 w-4" />
-              )}
-              {project.status === 'COMPLETED' ? 'Mark Active' : 'Mark Completed'}
+              <Shield className="h-4 w-4" /> Client Portal View
             </Button>
-            <Button
-              onClick={() => setIsEditingInfo(!isEditingInfo)}
-              className="flex items-center gap-2"
-            >
-              <Settings className="h-4 w-4" /> Settings
-            </Button>
-          </div>
-        )}
+          )}
+
+          {isAdmin && (
+            <>
+              <Button
+                variant="ghost"
+                onClick={handleArchiveRestore}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+              >
+                {project.status === 'COMPLETED' ? (
+                  <RotateCcw className="h-4 w-4" />
+                ) : (
+                  <Clock className="h-4 w-4" />
+                )}
+                {project.status === 'COMPLETED' ? 'Mark Active' : 'Mark Completed'}
+              </Button>
+              <Button
+                onClick={() => setIsEditingInfo(!isEditingInfo)}
+                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+              >
+                <Settings className="h-4 w-4" /> Settings
+              </Button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Tabs */}
@@ -466,7 +491,7 @@ export function ProjectDetailsPage() {
             { id: 'files', label: 'Files', icon: Upload },
             { id: 'meetings', label: 'Meetings', icon: Video },
             { id: 'timelogs', label: 'Time Logs', icon: Clock },
-            isAdmin && { id: 'invoices', label: 'Invoices', icon: DollarSign },
+            isAdmin && { id: 'billing', label: 'Billing', icon: DollarSign },
             { id: 'deployments', label: 'Deployments', icon: Rocket },
             { id: 'notes', label: 'Notes', icon: Shield },
             { id: 'activity', label: 'Activity', icon: Clock },
@@ -1237,50 +1262,424 @@ export function ProjectDetailsPage() {
           </Card>
         )}
 
-        {/* --- INVOICES TAB --- */}
-        {activeTab === 'invoices' && isAdmin && (
-          <Card className="p-0 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
-                    <th className="px-6 py-4">Invoice Number</th>
-                    <th className="px-6 py-4">Client</th>
-                    <th className="px-6 py-4">Amount</th>
-                    <th className="px-6 py-4">Balance</th>
-                    <th className="px-6 py-4">Due Date</th>
-                    <th className="px-6 py-4">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {project.invoices?.length ? (
-                    project.invoices.map((invoice) => (
-                      <tr key={invoice.id} className="border-b border-border">
-                        <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
-                        <td className="px-6 py-4">{invoice.client?.companyName}</td>
-                        <td className="px-6 py-4">
-                          {invoice.currency} {invoice.total.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          {invoice.currency} {invoice.balanceDue.toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4">
-                          {new Date(invoice.dueDate).toLocaleDateString()}
-                        </td>
-                        <td className="px-6 py-4 font-bold text-primary">{invoice.status}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={7} className="px-6 py-12 text-center text-foreground/45">
-                        No invoices found for this project.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+        {/* --- BILLING / INVOICES TAB --- */}
+        {(activeTab === 'billing' || activeTab === 'invoices') && isAdmin && (
+          <div className="grid gap-6">
+            {/* 1. Summary Cards */}
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Contract Value
+                </span>
+                <span className="mt-1 block text-lg font-bold text-primary">
+                  ${project.budget.toLocaleString()}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Revenue Received
+                </span>
+                <span className="mt-1 block text-lg font-bold text-emerald-600">
+                  $
+                  {(
+                    project.invoices?.reduce((sum, i) => sum + i.amountPaid, 0) || 0
+                  ).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Outstanding Balance
+                </span>
+                <span className="mt-1 block text-lg font-bold text-danger">
+                  $
+                  {(
+                    project.invoices?.reduce((sum, i) => sum + i.balanceDue, 0) || 0
+                  ).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Expenses Logged
+                </span>
+                <span className="mt-1 block text-lg font-bold text-foreground">
+                  ${(project.expenses?.reduce((sum, e) => sum + e.amount, 0) || 0).toLocaleString()}
+                </span>
+              </div>
+              <div className="p-4 rounded-xl border border-border bg-card">
+                <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                  Estimated Profit
+                </span>
+                <span className="mt-1 block text-lg font-bold text-indigo-600">
+                  $
+                  {(
+                    project.budget - (project.expenses?.reduce((sum, e) => sum + e.amount, 0) || 0)
+                  ).toLocaleString()}
+                </span>
+              </div>
             </div>
-          </Card>
+
+            {/* Billing Progress bar */}
+            <Card className="p-4">
+              <div className="flex justify-between items-center text-xs font-bold text-foreground/60 mb-2">
+                <span>Payment Realization Progress</span>
+                <span>
+                  {Math.round(
+                    ((project.invoices?.reduce((sum, i) => sum + i.amountPaid, 0) || 0) /
+                      (project.budget || 1)) *
+                      100,
+                  )}
+                  % Paid
+                </span>
+              </div>
+              <div className="h-3 w-full bg-muted rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(
+                      Math.round(
+                        ((project.invoices?.reduce((sum, i) => sum + i.amountPaid, 0) || 0) /
+                          (project.budget || 1)) *
+                          100,
+                      ),
+                      100,
+                    )}%`,
+                  }}
+                />
+              </div>
+            </Card>
+
+            {/* 2. Billing Plan configuration or list */}
+            {!billingPlan ? (
+              <Card className="p-6 text-center border border-dashed border-primary/20 bg-primary/5">
+                <DollarSign className="h-10 w-10 text-primary mx-auto mb-3" />
+                <h3 className="text-base font-bold text-foreground">No Billing Plan Setup</h3>
+                <p className="text-sm text-foreground/60 mt-1 max-w-md mx-auto">
+                  Setup a billing structure (Milestone, Retainer, Advance + Balance) to track
+                  project finances and automatically generate stage invoices.
+                </p>
+                <div className="mt-4 flex justify-center gap-3">
+                  <select
+                    id="billing-plan-select-init"
+                    className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none"
+                    defaultValue="CUSTOM"
+                  >
+                    <option value="FULL_PAYMENT">Full Payment (100% upfront)</option>
+                    <option value="ADVANCE_BALANCE">Advance + Balance (50% / 50%)</option>
+                    <option value="MILESTONE">Milestone Billing (Multiple stages)</option>
+                    <option value="MONTHLY_RETAINER">Monthly Retainer</option>
+                    <option value="AMC">AMC Support Contract</option>
+                    <option value="CUSTOM">Custom Billing Structure</option>
+                  </select>
+                  <Button
+                    onClick={async () => {
+                      const sel = document.getElementById(
+                        'billing-plan-select-init',
+                      ) as HTMLSelectElement;
+                      const type = sel?.value || 'CUSTOM';
+
+                      let stages: any[] = [];
+                      if (type === 'FULL_PAYMENT') {
+                        stages = [{ name: 'Upfront Payment', amount: project.budget }];
+                      } else if (type === 'ADVANCE_BALANCE') {
+                        stages = [
+                          { name: 'Advance Booking Payment', amount: project.budget * 0.5 },
+                          { name: 'Final Handover Balance', amount: project.budget * 0.5 },
+                        ];
+                      } else {
+                        stages = [{ name: 'First Stage Milestone', amount: project.budget }];
+                      }
+
+                      try {
+                        await api.post(`/billing-plans/${id}`, {
+                          billingType: type,
+                          totalAmount: project.budget,
+                          stages,
+                        });
+                        notify({ type: 'success', title: 'Billing Plan Initialized' });
+                        loadProjectDetails();
+                      } catch (err) {
+                        notify({
+                          type: 'error',
+                          title: 'Setup Failed',
+                          message: errorMessage(err),
+                        });
+                      }
+                    }}
+                    className="font-bold text-xs"
+                  >
+                    Initialize Plan
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              <div className="grid gap-6 lg:grid-cols-3">
+                {/* Billing stages layout */}
+                <div className="lg:col-span-2 grid gap-4">
+                  <Card className="p-4">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-base font-bold text-foreground">Billing Plan Stages</h3>
+                      <span className="bg-primary/5 text-primary border border-primary/10 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">
+                        Plan: {billingPlan.billingType}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3">
+                      {billingPlan.stages?.map((stage: any, index: number) => (
+                        <div
+                          key={stage.id}
+                          className="flex flex-wrap items-center justify-between gap-3 p-3 border border-border rounded-xl bg-muted/5 hover:bg-muted/10 transition"
+                        >
+                          <div>
+                            <span className="text-[10px] text-foreground/45 block uppercase font-bold">
+                              Stage {index + 1}
+                            </span>
+                            <span className="font-bold text-sm text-foreground">{stage.name}</span>
+                            {stage.dueDate && (
+                              <span className="text-xs text-foreground/50 block mt-0.5">
+                                Due: {new Date(stage.dueDate).toLocaleDateString()}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4">
+                            <span className="font-bold text-primary">
+                              ${stage.amount.toLocaleString()}
+                            </span>
+
+                            {stage.status === 'PENDING' && (
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    await api.post(
+                                      `/billing-plans/${id}/stages/${stage.id}/generate-invoice`,
+                                    );
+                                    notify({ type: 'success', title: 'Draft Invoice Generated' });
+                                    loadProjectDetails();
+                                  } catch (err) {
+                                    notify({
+                                      type: 'error',
+                                      title: 'Invoice failed',
+                                      message: errorMessage(err),
+                                    });
+                                  }
+                                }}
+                                className="font-bold text-xs h-8 px-3"
+                              >
+                                Generate Invoice
+                              </Button>
+                            )}
+
+                            {stage.status === 'INVOICED' && stage.invoice && (
+                              <span className="bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded text-[10px] font-bold">
+                                Invoiced ({stage.invoice.invoiceNumber})
+                              </span>
+                            )}
+
+                            {stage.status === 'INVOICED' && !stage.invoice && (
+                              <span className="bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded text-[10px] font-bold">
+                                Invoiced
+                              </span>
+                            )}
+
+                            {stage.invoice?.status === 'PAID' && (
+                              <span className="bg-emerald-500/10 text-emerald-600 px-2 py-0.5 rounded text-[10px] font-bold flex items-center gap-0.5">
+                                <Check className="h-3 w-3" /> Paid
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Inline Add Stage builder */}
+                    <div className="border-t border-border mt-4 pt-4">
+                      <h4 className="text-xs font-bold uppercase text-foreground/55 mb-3">
+                        Add Custom Billing Stage
+                      </h4>
+                      <form
+                        onSubmit={async (e) => {
+                          e.preventDefault();
+                          const target = e.target as any;
+                          const name = target.stageName.value;
+                          const amount = Number(target.stageAmount.value);
+                          const dueDate = target.stageDueDate.value;
+
+                          if (!name || !amount) {
+                            notify({
+                              type: 'error',
+                              title: 'Inputs required',
+                              message: 'Name and amount are required',
+                            });
+                            return;
+                          }
+
+                          const updatedStages = [
+                            ...(billingPlan.stages?.map((s: any) => ({
+                              id: s.id,
+                              name: s.name,
+                              amount: s.amount,
+                              dueDate: s.dueDate,
+                              status: s.status,
+                            })) || []),
+                            { name, amount, dueDate: dueDate || undefined },
+                          ];
+
+                          try {
+                            await api.post(`/billing-plans/${id}`, {
+                              billingType: billingPlan.billingType,
+                              totalAmount: billingPlan.totalAmount + amount,
+                              stages: updatedStages,
+                            });
+                            notify({ type: 'success', title: 'Stage Added' });
+                            target.reset();
+                            loadProjectDetails();
+                          } catch (err) {
+                            notify({
+                              type: 'error',
+                              title: 'Add failed',
+                              message: errorMessage(err),
+                            });
+                          }
+                        }}
+                        className="grid gap-3 sm:grid-cols-3"
+                      >
+                        <Input
+                          id="stageName"
+                          label="Stage Name"
+                          placeholder="Stage Name (e.g. Design Approval)"
+                          className="h-9 text-xs"
+                          required
+                        />
+                        <Input
+                          id="stageAmount"
+                          label="Amount ($)"
+                          type="number"
+                          placeholder="Amount ($)"
+                          className="h-9 text-xs"
+                          required
+                        />
+                        <div className="flex gap-2 items-end">
+                          <Input
+                            id="stageDueDate"
+                            label="Due Date"
+                            type="date"
+                            className="h-9 text-xs"
+                          />
+                          <Button type="submit" className="font-bold h-9 px-4">
+                            Add
+                          </Button>
+                        </div>
+                      </form>
+                    </div>
+                  </Card>
+                </div>
+
+                <div className="grid gap-4">
+                  {/* Actions to delete/reconfigure plan */}
+                  <Card className="p-4 flex flex-col justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-foreground">
+                        Reconfigure Billing Plan
+                      </h3>
+                      <p className="text-xs text-foreground/60 mt-1">
+                        Changing the plan layout will preserve invoiced stages but remove any
+                        pending draft milestones.
+                      </p>
+                    </div>
+                    <Button
+                      variant="danger"
+                      onClick={async () => {
+                        if (!window.confirm('Reset billing plan? Pending stages will be removed.'))
+                          return;
+                        try {
+                          await api.post(`/billing-plans/${id}`, {
+                            billingType: 'CUSTOM',
+                            totalAmount: project.budget,
+                            stages: [],
+                          });
+                          notify({ type: 'success', title: 'Billing Plan Reset' });
+                          loadProjectDetails();
+                        } catch (err) {
+                          notify({
+                            type: 'error',
+                            title: 'Reset failed',
+                            message: errorMessage(err),
+                          });
+                        }
+                      }}
+                      className="font-bold text-xs mt-3 h-9"
+                    >
+                      Reset Billing Plan
+                    </Button>
+                  </Card>
+                </div>
+              </div>
+            )}
+
+            {/* Invoices List table */}
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-3">Project Invoice History</h3>
+              <Card className="p-0 overflow-hidden border border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                        <th className="px-6 py-4">Invoice Number</th>
+                        <th className="px-6 py-4">Stage Reference</th>
+                        <th className="px-6 py-4">Amount</th>
+                        <th className="px-6 py-4">Balance</th>
+                        <th className="px-6 py-4">Due Date</th>
+                        <th className="px-6 py-4">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {project.invoices?.length ? (
+                        project.invoices.map((invoice) => (
+                          <tr
+                            key={invoice.id}
+                            className="border-b border-border hover:bg-muted/5 transition"
+                          >
+                            <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                            <td className="px-6 py-4">
+                              {invoice.billingStage?.name || 'Ad-hoc invoice'}
+                            </td>
+                            <td className="px-6 py-4">
+                              {invoice.currency} {invoice.total.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              {invoice.currency} {invoice.balanceDue.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              {new Date(invoice.dueDate).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  invoice.status === 'PAID'
+                                    ? 'bg-emerald-500/10 text-emerald-600'
+                                    : 'bg-amber-500/10 text-amber-600'
+                                }`}
+                              >
+                                {invoice.status}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={6}
+                            className="px-6 py-12 text-center text-foreground/45 italic"
+                          >
+                            No invoices generated for this project.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
+          </div>
         )}
 
         {/* --- DEPLOYMENTS TAB --- */}

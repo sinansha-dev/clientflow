@@ -114,6 +114,10 @@ export const projectRepository = {
         },
         teamMembers: true,
         milestones: true,
+        activities: {
+          take: 5,
+          orderBy: { createdAt: 'desc' },
+        },
       },
       orderBy: { [sortBy]: sortOrder },
     });
