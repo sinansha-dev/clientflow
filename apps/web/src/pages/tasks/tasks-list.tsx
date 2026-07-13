@@ -146,7 +146,14 @@ export function TasksListPage({ projectId: scopedProjectId }: { projectId?: stri
     }
   };
 
-  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
+  const creatableProjects = projects.filter((project) => {
+    if (user?.role === 'ADMIN') return true;
+    const projectRole = project.projectMembers?.find(
+      (member) => member.userId === user?.id,
+    )?.projectRole;
+    return projectRole === 'PROJECT_MANAGER' || projectRole === 'LEAD_DEVELOPER';
+  });
+  const canCreateTasks = creatableProjects.length > 0;
 
   return (
     <div className="grid gap-6">

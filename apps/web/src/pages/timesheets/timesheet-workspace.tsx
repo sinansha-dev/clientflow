@@ -93,7 +93,7 @@ export function TimesheetWorkspacePage() {
   const [filters, setFilters] = useState({
     startDate: '',
     endDate: '',
-    developerId: 'ALL',
+    staffId: 'ALL',
     projectId: 'ALL',
     clientId: 'ALL',
     taskId: 'ALL',
@@ -132,7 +132,7 @@ export function TimesheetWorkspacePage() {
     const defaultFilters = {
       startDate: '',
       endDate: '',
-      developerId: 'ALL',
+      staffId: 'ALL',
       projectId: 'ALL',
       clientId: 'ALL',
       taskId: 'ALL',
@@ -521,8 +521,8 @@ export function TimesheetWorkspacePage() {
       if (filters.clientId !== 'ALL' && log.project?.clientId !== filters.clientId) {
         return false;
       }
-      // Developer filter
-      if (filters.developerId !== 'ALL' && log.userId !== filters.developerId) {
+      // Staff filter
+      if (filters.staffId !== 'ALL' && log.userId !== filters.staffId) {
         return false;
       }
       // Task filter
@@ -691,7 +691,7 @@ export function TimesheetWorkspacePage() {
   const chartsData = useMemo(() => {
     // 1. Projects Breakdown
     const projMap: Record<string, number> = {};
-    // 2. Developer Breakdown
+    // 2. Staff Breakdown
     const devMap: Record<string, number> = {};
     // 3. Weekly hours trend (last 7 days)
     const trendMap: Record<string, number> = {};
@@ -711,7 +711,7 @@ export function TimesheetWorkspacePage() {
       const pName = log.project?.projectName || 'No Project';
       projMap[pName] = (projMap[pName] || 0) + hours;
 
-      // Developers
+      // Staff members
       const devName = log.user ? `${log.user.firstName} ${log.user.lastName}` : 'Unassigned';
       devMap[devName] = (devMap[devName] || 0) + hours;
 
@@ -726,7 +726,7 @@ export function TimesheetWorkspacePage() {
       name,
       hours: Math.round(hours * 10) / 10,
     }));
-    const developerData = Object.entries(devMap).map(([name, hours]) => ({
+    const staffData = Object.entries(devMap).map(([name, hours]) => ({
       name,
       hours: Math.round(hours * 10) / 10,
     }));
@@ -735,14 +735,14 @@ export function TimesheetWorkspacePage() {
       hours: Math.round(hours * 10) / 10,
     }));
 
-    return { projectData, developerData, trendData };
+    return { projectData, staffData, trendData };
   }, [logs]);
 
   // CSV Export Trigger
   const exportToCSV = () => {
     const headers = [
       'Date',
-      'Developer',
+      'Staff Member',
       'Project',
       'Task',
       'Description',
@@ -1138,7 +1138,7 @@ export function TimesheetWorkspacePage() {
               <table className="w-full text-left text-xs font-semibold">
                 <thead>
                   <tr className="bg-muted/40 border-b border-border text-foreground/50 font-bold uppercase tracking-wider text-[10px]">
-                    <th className="px-5 py-3">Developer</th>
+                    <th className="px-5 py-3">Staff Member</th>
                     <th className="px-5 py-3">Project</th>
                     <th className="px-5 py-3">Task</th>
                     <th className="px-5 py-3">Description</th>
@@ -1207,7 +1207,7 @@ export function TimesheetWorkspacePage() {
                   {activeTimersList.length === 0 && (
                     <tr>
                       <td colSpan={7} className="px-5 py-8 text-center text-foreground/45 italic">
-                        No developers are currently tracking time.
+                        No Staff members are currently tracking time.
                       </td>
                     </tr>
                   )}
@@ -1246,8 +1246,8 @@ export function TimesheetWorkspacePage() {
                 <div className="grid gap-1">
                   <label className="text-foreground/50">Team Member</label>
                   <select
-                    value={filters.developerId}
-                    onChange={(e) => handleFilterChange('developerId', e.target.value)}
+                    value={filters.staffId}
+                    onChange={(e) => handleFilterChange('staffId', e.target.value)}
                     className="h-9 rounded-xl border border-border bg-background px-2 outline-none font-semibold cursor-pointer"
                   >
                     <option value="ALL">All Members</option>
@@ -1546,7 +1546,7 @@ export function TimesheetWorkspacePage() {
                   <thead>
                     <tr className="bg-muted/40 border-b border-border text-foreground/50 font-bold uppercase tracking-wider text-[10px]">
                       <th className="px-5 py-3 w-10">Select</th>
-                      <th className="px-5 py-3">Developer</th>
+                      <th className="px-5 py-3">Staff Member</th>
                       <th className="px-5 py-3">Description</th>
                       <th className="px-5 py-3">Project</th>
                       <th className="px-5 py-3 text-center">Hours</th>
@@ -1692,17 +1692,17 @@ export function TimesheetWorkspacePage() {
               </Card>
             </div>
 
-            {/* Detailed visual developer utilization breakdowns */}
+            {/* Detailed visual Staff utilization breakdowns */}
             <Card className="p-0 overflow-hidden border border-border bg-card">
               <div className="px-5 py-4 border-b border-border flex justify-between items-center">
-                <h3 className="text-sm font-bold">Hours Logged by Developer</h3>
+                <h3 className="text-sm font-bold">Hours Logged by Staff</h3>
                 <span className="text-xs text-foreground/45 font-bold">
-                  Total developer work share metrics
+                  Total Staff work share metrics
                 </span>
               </div>
               <div className="p-5 text-xs font-semibold space-y-4">
-                {chartsData.developerData.map((d) => {
-                  const maxHours = Math.max(...chartsData.developerData.map((e) => e.hours), 1);
+                {chartsData.staffData.map((d) => {
+                  const maxHours = Math.max(...chartsData.staffData.map((e) => e.hours), 1);
                   const pct = Math.round((d.hours / maxHours) * 100);
                   return (
                     <div key={d.name}>
@@ -1716,9 +1716,9 @@ export function TimesheetWorkspacePage() {
                     </div>
                   );
                 })}
-                {chartsData.developerData.length === 0 && (
+                {chartsData.staffData.length === 0 && (
                   <div className="py-12 text-center text-foreground/45 italic">
-                    No developer tracking logs recorded.
+                    No Staff tracking logs recorded.
                   </div>
                 )}
               </div>

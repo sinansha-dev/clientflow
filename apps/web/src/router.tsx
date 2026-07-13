@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
       {
         path: '/clients',
         element: (
-          <ProtectedRoute roles={['ADMIN']}>
+          <ProtectedRoute roles={[...staffOnly]}>
             <ClientsListPage />
           </ProtectedRoute>
         ),
@@ -62,7 +62,7 @@ export const router = createBrowserRouter([
       {
         path: '/clients/:id',
         element: (
-          <ProtectedRoute roles={['ADMIN']}>
+          <ProtectedRoute roles={[...staffOnly]}>
             <ClientDetailsPage />
           </ProtectedRoute>
         ),
@@ -111,7 +111,7 @@ export const router = createBrowserRouter([
       {
         path: '/team',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <TeamListPage />
           </ProtectedRoute>
         ),
@@ -119,7 +119,7 @@ export const router = createBrowserRouter([
       {
         path: '/team/:id',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <TeamProfilePage />
           </ProtectedRoute>
         ),
@@ -135,7 +135,7 @@ export const router = createBrowserRouter([
       {
         path: '/reports',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <ReportsWorkspacePage />
           </ProtectedRoute>
         ),

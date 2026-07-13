@@ -35,7 +35,7 @@ export const portalRepository = {
     if (role === 'STAFF') {
       return {
         deletedAt: null,
-        OR: [{ projectManagerId: userId }, { projectMembers: { some: { userId } } }],
+        projectMembers: { some: { userId } },
       };
     }
 

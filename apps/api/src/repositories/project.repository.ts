@@ -1,4 +1,5 @@
 import type { Prisma } from '@prisma/client';
+import type { ProjectRole } from '@clientflow/types';
 import { prisma } from '../config/prisma';
 
 type ProjectHealthInput = {
@@ -74,12 +75,7 @@ export const projectRepository = {
       ...(managerId && managerId !== 'ALL' ? { projectManagerId: managerId } : {}),
       ...(userId ? { projectMembers: { some: { userId } } } : {}),
       ...(currentUser?.role === 'STAFF'
-        ? {
-            OR: [
-              { projectManagerId: currentUser.id },
-              { projectMembers: { some: { userId: currentUser.id } } },
-            ],
-          }
+        ? { projectMembers: { some: { userId: currentUser.id } } }
         : {}),
       ...(currentUser?.role === 'CLIENT'
         ? {
@@ -202,7 +198,6 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
-                hourlyRate: true,
               },
             },
           },
@@ -218,7 +213,6 @@ export const projectRepository = {
                 firstName: true,
                 lastName: true,
                 avatar: true,
-                hourlyRate: true,
               },
             },
           },
@@ -239,7 +233,6 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
-                hourlyRate: true,
               },
             },
             participants: {
@@ -267,7 +260,6 @@ export const projectRepository = {
                 lastName: true,
                 email: true,
                 avatar: true,
-                hourlyRate: true,
               },
             },
             task: {
@@ -300,8 +292,26 @@ export const projectRepository = {
 
     if (!project) return null;
 
-    // Compute and return computed health
     const computedHealth = this.computeHealth(project);
+    if (currentUser?.role === 'STAFF') {
+      const memberRole = await prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId: id, userId: currentUser.id } },
+        select: { projectRole: true },
+      });
+      const canViewProjectFinancials = memberRole?.projectRole === 'PROJECT_MANAGER';
+
+      if (!canViewProjectFinancials) {
+        return {
+          ...project,
+          budget: undefined,
+          invoices: [],
+          quotations: [],
+          timeLogs: project.timeLogs.filter((log) => log.userId === currentUser.id),
+          healthStatus: computedHealth,
+        };
+      }
+    }
+
     return {
       ...project,
       healthStatus: computedHealth,
@@ -310,7 +320,7 @@ export const projectRepository = {
 
   async create(
     data: Prisma.ProjectCreateInput & {
-      projectMembersInput?: Array<{ userId: string; role: string }>;
+      projectMembersInput?: Array<{ userId: string; projectRole: ProjectRole }>;
     },
   ) {
     // Generate unique project code CF-XXXXXX
@@ -332,7 +342,8 @@ export const projectRepository = {
       data: {
         projectId: project.id,
         userId: project.projectManagerId,
-        projectRole: 'Project Manager',
+        projectRole: 'PROJECT_MANAGER',
+        assignedById: project.createdBy,
       },
     });
 
@@ -346,7 +357,8 @@ export const projectRepository = {
               data: {
                 projectId: project.id,
                 userId: tm.userId,
-                projectRole: tm.role,
+                projectRole: tm.projectRole,
+                assignedById: project.createdBy,
               },
             }),
           ),
@@ -404,13 +416,40 @@ export const projectRepository = {
   },
 
   // Project Member Management
-  async addProjectMember(projectId: string, userId: string, projectRole: string) {
+  async listProjectMembers(projectId: string) {
+    return prisma.projectMember.findMany({
+      where: { projectId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            avatar: true,
+            status: true,
+          },
+        },
+        assignedBy: {
+          select: { id: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: [{ projectRole: 'asc' }, { joinedAt: 'asc' }],
+    });
+  },
+
+  async addProjectMember(
+    projectId: string,
+    userId: string,
+    projectRole: ProjectRole,
+    assignedById: string,
+  ) {
     return prisma.projectMember.upsert({
       where: {
         projectId_userId: { projectId, userId },
       },
       update: { projectRole },
-      create: { projectId, userId, projectRole },
+      create: { projectId, userId, projectRole, assignedById },
       include: {
         user: {
           select: {
@@ -433,7 +472,7 @@ export const projectRepository = {
     });
   },
 
-  async updateProjectMemberRole(projectId: string, userId: string, projectRole: string) {
+  async updateProjectMemberRole(projectId: string, userId: string, projectRole: ProjectRole) {
     return prisma.projectMember.update({
       where: {
         projectId_userId: { projectId, userId },

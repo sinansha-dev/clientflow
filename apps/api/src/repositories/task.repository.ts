@@ -13,7 +13,7 @@ export const taskRepository = {
       search?: string;
       overdue?: boolean;
       completed?: boolean;
-      userId?: string; // Limit to assigned tasks if developer role
+      userId?: string; // Limit to assigned tasks if Staff role
       sortBy?: string;
       sortOrder?: 'asc' | 'desc';
     },
@@ -125,6 +125,9 @@ export const taskRepository = {
             id: true,
             projectName: true,
             projectCode: true,
+            projectMembers: {
+              select: { userId: true, projectRole: true },
+            },
           },
         },
         assignees: {

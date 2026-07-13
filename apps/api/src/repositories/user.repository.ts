@@ -47,7 +47,7 @@ export const userRepository = {
       where: {
         deletedAt: null,
         status: 'ACTIVE',
-        role: { in: ['ADMIN', 'STAFF'] },
+        role: 'STAFF',
       },
       select: publicSelect,
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],

@@ -5,8 +5,10 @@ import { Card } from '../../components/ui/card';
 import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
+import { projectRoleLabels } from '@clientflow/shared';
+import type { ProjectRole } from '@clientflow/types';
 import { Link } from 'react-router-dom';
-import { Search, Plus } from 'lucide-react';
+import { Search, Plus, Power, PowerOff } from 'lucide-react';
 
 interface TeamMemberSummary {
   id: string;
@@ -22,6 +24,11 @@ interface TeamMemberSummary {
   skills: string[];
   availabilityStatus: string;
   projectsCount: number;
+  assignedProjects: Array<{
+    projectId: string;
+    projectRole: ProjectRole;
+    project: { id: string; projectName: string; projectCode: string };
+  }>;
   activeTasksCount: number;
   weeklyHours: number;
 }
@@ -197,7 +204,7 @@ export function TeamListPage() {
         <div>
           <h1 className="text-3xl font-bold text-foreground">Workforce Directory</h1>
           <p className="text-sm text-foreground/50 mt-1">
-            Manage developer skills, role permissions, workloads, and timer statuses.
+            Manage Staff profiles, project responsibilities, workloads, and availability.
           </p>
         </div>
 
@@ -250,7 +257,7 @@ export function TeamListPage() {
             >
               <option value="ALL">All Roles</option>
               <option value="ADMIN">Admin</option>
-              <option value="STAFF">Developer</option>
+              <option value="STAFF">Staff</option>
             </select>
           </div>
 
@@ -288,127 +295,158 @@ export function TeamListPage() {
         </div>
       </Card>
 
-      {/* Team grid card */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {loading ? (
-          <div className="col-span-full py-12 text-center text-foreground/45 text-sm">
-            Loading team roster directory...
-          </div>
-        ) : members.length === 0 ? (
-          <div className="col-span-full py-12 text-center text-foreground/45 text-sm border border-dashed rounded-lg bg-card">
-            No team members matched the filter.
-          </div>
-        ) : (
-          members.map((member) => (
-            <Card
-              key={member.id}
-              className={`flex flex-col justify-between border-t-4 transition duration-150 ${
-                member.status === 'INACTIVE'
-                  ? 'border-t-slate-500 opacity-60'
-                  : member.availabilityStatus === 'Available'
-                    ? 'border-t-emerald-500'
-                    : member.availabilityStatus === 'Busy' ||
-                        member.availabilityStatus === 'In Meeting'
-                      ? 'border-t-orange-500'
-                      : 'border-t-slate-400'
-              }`}
-            >
-              {/* Member detail header */}
-              <div className="flex gap-3">
-                <div className="h-11 w-11 rounded-full bg-primary/10 flex items-center justify-center font-bold text-primary shrink-0">
-                  {member.firstName.charAt(0)}
-                  {member.lastName.charAt(0)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <Link
-                    to={`/team/${member.id}`}
-                    className="font-bold text-sm text-foreground hover:underline truncate block"
-                  >
-                    {member.firstName} {member.lastName}
-                  </Link>
-                  <span className="text-[10px] text-foreground/50 font-medium block">
-                    {member.jobTitle || 'Team Member'} &bull; {member.department || 'Staff'}
-                  </span>
-                  <span className="text-[10px] font-mono text-primary font-bold tracking-wide uppercase mt-1 block">
-                    {member.role}
-                  </span>
-                </div>
-              </div>
-
-              {/* Skills Tags */}
-              <div className="flex flex-wrap gap-1 my-3.5">
-                {member.skills?.slice(0, 3).map((sk) => (
-                  <span
-                    key={sk}
-                    className="bg-muted px-2 py-0.5 rounded text-[9px] font-semibold text-foreground/60 border border-border/40"
-                  >
-                    {sk}
-                  </span>
-                ))}
-                {member.skills?.length > 3 && (
-                  <span className="text-[9px] text-foreground/40 font-semibold self-center">
-                    +{member.skills.length - 3} more
-                  </span>
-                )}
-              </div>
-
-              {/* Utilization metrics row */}
-              <div className="grid grid-cols-3 gap-2 border-t border-border/40 pt-3 text-[10px] text-foreground/50">
-                <div className="text-center">
-                  <span className="block font-bold text-xs text-foreground/80">
-                    {member.projectsCount}
-                  </span>
-                  Projects
-                </div>
-                <div className="text-center border-x border-border/40">
-                  <span className="block font-bold text-xs text-foreground/80">
-                    {member.activeTasksCount}
-                  </span>
-                  Tasks
-                </div>
-                <div className="text-center">
-                  <span className="block font-bold text-xs text-foreground/80">
-                    {member.weeklyHours}h
-                  </span>
-                  Weekly Hours
-                </div>
-              </div>
-
-              {/* Roster Controls */}
-              <div className="flex items-center justify-between border-t border-border/40 pt-3 mt-3">
-                <span className="text-[10px] font-semibold flex items-center gap-1">
-                  <div
-                    className={`h-2 w-2 rounded-full ${
-                      member.availabilityStatus === 'Available'
-                        ? 'bg-emerald-500'
-                        : member.availabilityStatus === 'Busy'
-                          ? 'bg-orange-500'
-                          : member.availabilityStatus === 'In Meeting'
-                            ? 'bg-orange-500 animate-pulse'
-                            : 'bg-slate-400'
-                    }`}
-                  />
-                  {member.availabilityStatus}
-                </span>
-
-                {isAdmin && (
-                  <button
-                    onClick={() => handleToggleDeactivate(member.id, member.status)}
-                    className={`text-[10px] font-bold px-2 py-1 rounded border transition ${
-                      member.status === 'ACTIVE'
-                        ? 'border-danger/30 text-danger hover:bg-danger/5'
-                        : 'border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/5'
-                    }`}
-                  >
-                    {member.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
-                  </button>
-                )}
-              </div>
-            </Card>
-          ))
-        )}
+      {/* Team directory */}
+      <div className="overflow-hidden rounded-lg border border-border bg-card">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-sm">
+            <thead className="border-b border-border bg-muted/20 text-xs uppercase text-foreground/50">
+              <tr>
+                <th className="px-5 py-3.5">Name</th>
+                <th className="px-5 py-3.5">Global Role</th>
+                <th className="px-5 py-3.5">Assigned Projects</th>
+                <th className="px-5 py-3.5">Project Roles</th>
+                <th className="px-5 py-3.5">Status</th>
+                <th className="px-5 py-3.5 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {loading ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-foreground/45">
+                    Loading team directory...
+                  </td>
+                </tr>
+              ) : members.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-12 text-center text-foreground/45">
+                    No Staff members matched the filters.
+                  </td>
+                </tr>
+              ) : (
+                members.map((member) => (
+                  <tr key={member.id} className="align-middle hover:bg-muted/10">
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        {member.avatar ? (
+                          <img
+                            src={member.avatar}
+                            alt=""
+                            className="h-10 w-10 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
+                            {member.firstName.charAt(0)}
+                            {member.lastName.charAt(0)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <Link
+                            to={'/team/' + member.id}
+                            className="block truncate font-semibold hover:text-primary"
+                          >
+                            {member.firstName} {member.lastName}
+                          </Link>
+                          <span className="block truncate text-xs text-foreground/45">
+                            {member.jobTitle || member.email}
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="rounded border border-border bg-muted/30 px-2 py-1 text-xs font-bold">
+                        {member.role === 'STAFF' ? 'Staff' : 'Admin'}
+                      </span>
+                    </td>
+                    <td className="px-5 py-4">
+                      <span className="font-semibold">{member.projectsCount}</span>
+                      <span className="ml-1 text-foreground/45">
+                        {member.projectsCount === 1 ? 'project' : 'projects'}
+                      </span>
+                      {member.assignedProjects?.length > 0 && (
+                        <p
+                          className="mt-1 max-w-[220px] truncate text-xs text-foreground/45"
+                          title={member.assignedProjects
+                            .map((assignment) => assignment.project.projectName)
+                            .join(', ')}
+                        >
+                          {member.assignedProjects
+                            .map((assignment) => assignment.project.projectName)
+                            .join(', ')}
+                        </p>
+                      )}
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex max-w-[280px] flex-wrap gap-1">
+                        {member.assignedProjects?.length ? (
+                          member.assignedProjects.map((assignment) => (
+                            <span
+                              key={assignment.projectId}
+                              title={assignment.project.projectName}
+                              className="rounded border border-primary/20 bg-primary/10 px-2 py-1 text-[10px] font-bold text-primary"
+                            >
+                              {projectRoleLabels[assignment.projectRole]}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-xs text-foreground/35">Not assigned</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={
+                            'h-2 w-2 rounded-full ' +
+                            (member.status !== 'ACTIVE'
+                              ? 'bg-slate-400'
+                              : member.availabilityStatus === 'Available'
+                                ? 'bg-emerald-500'
+                                : member.availabilityStatus === 'Busy' ||
+                                    member.availabilityStatus === 'In Meeting'
+                                  ? 'bg-orange-500'
+                                  : 'bg-slate-400')
+                          }
+                        />
+                        <div>
+                          <span className="block text-xs font-semibold">
+                            {member.status === 'ACTIVE' ? member.availabilityStatus : 'Suspended'}
+                          </span>
+                          <span className="text-[10px] text-foreground/40">
+                            {member.activeTasksCount} active tasks / {member.weeklyHours}h this week
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          title={
+                            member.status === 'ACTIVE' ? 'Deactivate member' : 'Activate member'
+                          }
+                          onClick={() => handleToggleDeactivate(member.id, member.status)}
+                          className={
+                            'inline-flex rounded-md p-2 transition ' +
+                            (member.status === 'ACTIVE'
+                              ? 'text-danger hover:bg-danger/10'
+                              : 'text-emerald-600 hover:bg-emerald-500/10')
+                          }
+                        >
+                          {member.status === 'ACTIVE' ? (
+                            <PowerOff className="h-4 w-4" />
+                          ) : (
+                            <Power className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
-
       {/* INVITE / MANUAL CREATE MEMBER MODAL */}
       {showInviteModal && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-xs flex items-center justify-center p-4">
@@ -498,7 +536,7 @@ export function TeamListPage() {
                     className="h-10 rounded border border-border bg-background px-3"
                     required
                   >
-                    <option value="STAFF">Developer</option>
+                    <option value="STAFF">Staff</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>

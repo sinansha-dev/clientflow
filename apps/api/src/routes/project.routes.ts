@@ -100,7 +100,7 @@ projectRoutes.get(
 
 projectRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'STAFF'), // Developers can update, but inside the controller we restrict modifying billing/owner details
+  requireRole('ADMIN', 'STAFF'), // Staff members can update, but inside the controller we restrict modifying billing/owner details
   validate(idParams, 'params'),
   validate(updateProjectSchema),
   (req, res, next) => projectController.update(req, res).catch(next),
@@ -124,10 +124,17 @@ projectRoutes.post(
   (req, res, next) => projectController.restore(req, res).catch(next),
 );
 
-// --- Team Endpoints ---
+// --- Project member endpoints ---
+projectRoutes.get(
+  '/:id/members',
+  requireRole('ADMIN', 'STAFF'),
+  validate(idParams, 'params'),
+  (req, res, next) => projectController.listProjectMembers(req, res).catch(next),
+);
+
 projectRoutes.post(
   '/:id/team',
-  requireRole('ADMIN'), // PM assignment and role modifications are Admin only
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(projectTeamMemberSchema),
   (req, res, next) => projectController.addTeamMember(req, res).catch(next),
@@ -135,15 +142,15 @@ projectRoutes.post(
 
 projectRoutes.patch(
   '/:id/team/:userId',
-  requireRole('ADMIN'),
+  requireRole('ADMIN', 'STAFF'),
   validate(teamMemberIdParams, 'params'),
-  validate(z.object({ role: z.string().min(1) })),
+  validate(projectTeamMemberSchema.omit({ userId: true })),
   (req, res, next) => projectController.updateTeamMember(req, res).catch(next),
 );
 
 projectRoutes.delete(
   '/:id/team/:userId',
-  requireRole('ADMIN'),
+  requireRole('ADMIN', 'STAFF'),
   validate(teamMemberIdParams, 'params'),
   (req, res, next) => projectController.removeTeamMember(req, res).catch(next),
 );
@@ -261,7 +268,7 @@ const fileIdParams = z.object({ id: uuidSchema });
 
 projectRoutes.delete(
   '/files/:id',
-  requireRole('ADMIN'),
+  requireRole('ADMIN', 'STAFF'),
   validate(fileIdParams, 'params'),
   (req, res, next) => portalController.deleteFile(req, res).catch(next),
 );

@@ -6,7 +6,7 @@ import { api } from '../lib/api';
 import { errorMessage } from '../lib/errors';
 import { CreateTaskModal } from '../components/tasks/create-task-modal';
 import { ProjectWizard } from '../components/projects/project-wizard';
-import type { Project, Task, ProjectTeam, TimeLog, Invoice, Meeting } from '@clientflow/types';
+import type { Project, Task, ProjectMember, TimeLog, Invoice, Meeting } from '@clientflow/types';
 import {
   Lock,
   Plus,
@@ -58,7 +58,7 @@ interface ClientApproval {
   createdAt: string;
 }
 
-interface DeveloperProductivity {
+interface StaffProductivity {
   name: string;
   hours: number;
   status: string;
@@ -258,7 +258,7 @@ export function DashboardPage() {
       collaboratorIds.add(p.projectManagerId);
     }
     if (p.projectMembers) {
-      p.projectMembers.forEach((member: ProjectTeam) => {
+      p.projectMembers.forEach((member: ProjectMember) => {
         if (member?.userId && member.userId !== user?.id) {
           collaboratorIds.add(member.userId);
         }
@@ -303,7 +303,14 @@ export function DashboardPage() {
   };
 
   const filteredTasks = getFilteredTasks();
-  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
+  const canCreateTasks =
+    user?.role === 'ADMIN' ||
+    projects.some((project) => {
+      const projectRole = project.projectMembers?.find(
+        (member) => member.userId === user?.id,
+      )?.projectRole;
+      return projectRole === 'PROJECT_MANAGER' || projectRole === 'LEAD_DEVELOPER';
+    });
   const padding = dashboardDensity === 'compact' ? 'p-4' : 'p-6';
 
   const toggleTaskCompletion = async (task: Task) => {
@@ -1328,8 +1335,8 @@ export function DashboardPage() {
             }
 
             if (widget.id === 'team-productivity') {
-              // Summarize timesheets/logged hours per developer
-              const devWork = timeLogs.reduce((acc: Record<string, DeveloperProductivity>, log) => {
+              // Summarize timesheets/logged hours per Staff member
+              const devWork = timeLogs.reduce((acc: Record<string, StaffProductivity>, log) => {
                 const authorId = log.user?.id;
                 if (!authorId) return acc;
                 if (!acc[authorId]) {
@@ -1381,7 +1388,7 @@ export function DashboardPage() {
                               </td>
                             </tr>
                           ) : (
-                            devList.map((dev: DeveloperProductivity) => {
+                            devList.map((dev: StaffProductivity) => {
                               const over = dev.hours > 40;
                               return (
                                 <tr key={dev.name} className="hover:bg-muted/15 transition-colors">

@@ -162,13 +162,13 @@ export const clientController = {
       throw forbidden('Access denied');
     }
 
-    // Enforce role permission: Developer cannot edit billing information
+    // Enforce role permission: Staff cannot edit billing information
     const billingFields = ['taxNumber', 'billingAddress', 'shippingAddress', 'currency'];
     const modifyingBilling = billingFields.some((field) => body[field] !== undefined);
 
     if (user.role === 'STAFF') {
       if (modifyingBilling) {
-        throw forbidden('Developers are not permitted to edit billing information');
+        throw forbidden('Staff members are not permitted to edit billing information');
       }
     }
 

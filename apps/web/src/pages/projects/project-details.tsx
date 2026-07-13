@@ -12,7 +12,15 @@ import { Input } from '../../components/ui/input';
 import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
-import type { Project, Milestone, ProjectNote, AuthUser, Meeting } from '@clientflow/types';
+import { projectRoleLabels, projectRoles } from '@clientflow/shared';
+import type {
+  Project,
+  Milestone,
+  ProjectNote,
+  AuthUser,
+  Meeting,
+  ProjectRole,
+} from '@clientflow/types';
 import {
   ArrowLeft,
   Calendar,
@@ -31,10 +39,14 @@ import {
   RotateCcw,
   FolderOpen,
   Check,
+  Users,
+  UserRoundCog,
+  Trash2,
 } from 'lucide-react';
 
 type ProjectTab =
   | 'overview'
+  | 'members'
   | 'milestones'
   | 'tasks'
   | 'files'
@@ -68,7 +80,11 @@ export function ProjectDetailsPage() {
 
   // Team Assignments Inline State
   const [showAddMember, setShowAddMember] = useState(false);
-  const [newMemberForm, setNewMemberForm] = useState({ userId: '', role: 'Frontend Developer' });
+  const [newMemberForm, setNewMemberForm] = useState<{
+    userId: string;
+    projectRole: ProjectRole;
+  }>({ userId: '', projectRole: 'DEVELOPER' });
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
 
   // Milestone Inline State
   const [showMilestoneForm, setShowMilestoneForm] = useState(false);
@@ -167,19 +183,29 @@ export function ProjectDetailsPage() {
     }
   }, [id]);
 
+  const currentProjectRole = project?.projectMembers?.find(
+    (member) => member.userId === user?.id,
+  )?.projectRole;
+  const isAdmin = user?.role === 'ADMIN';
+  const canManageMembers = isAdmin || currentProjectRole === 'PROJECT_MANAGER';
+  const canManageProject = isAdmin || currentProjectRole === 'PROJECT_MANAGER';
+  const canViewBilling = isAdmin || currentProjectRole === 'PROJECT_MANAGER';
+
   useEffect(() => {
-    if (user?.role === 'ADMIN') {
+    if (canManageMembers) {
       const loadStaff = async () => {
         try {
-          const res = await api.get('/users');
-          setStaff((res.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+          const res = await api.get('/users/staff');
+          setStaff(
+            (res.data.data?.users ?? []).filter((member: AuthUser) => member.role === 'STAFF'),
+          );
         } catch (err) {
           console.error(err);
         }
       };
       loadStaff();
     }
-  }, [user]);
+  }, [canManageMembers]);
 
   if (loading) {
     return <div className="py-12 text-center text-foreground/50">Loading project details...</div>;
@@ -188,8 +214,6 @@ export function ProjectDetailsPage() {
   if (!project) {
     return <div className="py-12 text-center text-foreground/50">Project not found.</div>;
   }
-
-  const isAdmin = user?.role === 'ADMIN';
 
   // --- Calculations ---
   const deadline = new Date(project.deadline);
@@ -249,10 +273,21 @@ export function ProjectDetailsPage() {
       await api.post(`/projects/${id}/team`, newMemberForm);
       notify({ type: 'success', title: 'Team Member Assigned' });
       setShowAddMember(false);
-      setNewMemberForm({ userId: '', role: 'Frontend Developer' });
+      setNewMemberForm({ userId: '', projectRole: 'DEVELOPER' });
       loadProjectDetails();
     } catch (err) {
       notify({ type: 'error', title: 'Assign Failed', message: errorMessage(err) });
+    }
+  };
+
+  const handleChangeMemberRole = async (memberId: string, projectRole: ProjectRole) => {
+    try {
+      await api.patch('/projects/' + id + '/team/' + memberId, { projectRole });
+      notify({ type: 'success', title: 'Project Role Updated' });
+      setEditingMemberId(null);
+      loadProjectDetails();
+    } catch (err) {
+      notify({ type: 'error', title: 'Role Update Failed', message: errorMessage(err) });
     }
   };
 
@@ -443,7 +478,7 @@ export function ProjectDetailsPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          {project && (
+          {canViewBilling && (
             <Button
               onClick={() => {
                 localStorage.setItem('client-portal-project-id', project.id);
@@ -456,20 +491,22 @@ export function ProjectDetailsPage() {
             </Button>
           )}
 
-          {isAdmin && (
+          {canManageProject && (
             <>
-              <Button
-                variant="ghost"
-                onClick={handleArchiveRestore}
-                className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
-              >
-                {project.status === 'COMPLETED' ? (
-                  <RotateCcw className="h-4 w-4" />
-                ) : (
-                  <Clock className="h-4 w-4" />
-                )}
-                {project.status === 'COMPLETED' ? 'Mark Active' : 'Mark Completed'}
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="ghost"
+                  onClick={handleArchiveRestore}
+                  className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
+                >
+                  {project.status === 'COMPLETED' ? (
+                    <RotateCcw className="h-4 w-4" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  {project.status === 'COMPLETED' ? 'Mark Active' : 'Mark Completed'}
+                </Button>
+              )}
               <Button
                 onClick={() => setIsEditingInfo(!isEditingInfo)}
                 className="flex items-center gap-2 h-10 px-4 rounded-xl text-xs font-bold"
@@ -486,12 +523,13 @@ export function ProjectDetailsPage() {
         {(
           [
             { id: 'overview', label: 'Overview', icon: FolderOpen },
+            { id: 'members', label: 'Members', icon: Users },
             { id: 'milestones', label: 'Milestones', icon: MilestoneIcon },
             { id: 'tasks', label: 'Tasks', icon: FileText },
             { id: 'files', label: 'Files', icon: Upload },
             { id: 'meetings', label: 'Meetings', icon: Video },
             { id: 'timelogs', label: 'Time Logs', icon: Clock },
-            isAdmin && { id: 'billing', label: 'Billing', icon: DollarSign },
+            canViewBilling && { id: 'billing', label: 'Billing', icon: DollarSign },
             { id: 'deployments', label: 'Deployments', icon: Rocket },
             { id: 'notes', label: 'Notes', icon: Shield },
             { id: 'activity', label: 'Activity', icon: Clock },
@@ -624,7 +662,7 @@ export function ProjectDetailsPage() {
 
         {/* --- OVERVIEW TAB --- */}
         {activeTab === 'overview' && (
-          <div className={`grid gap-6 ${isAdmin ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
+          <div className={`grid gap-6 ${canViewBilling ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
             {/* Countdown / Health */}
             <Card className="flex flex-col gap-4 justify-between bg-primary/5 border border-primary/10">
               <div>
@@ -673,7 +711,7 @@ export function ProjectDetailsPage() {
               </div>
             </Card>
 
-            {isAdmin && (
+            {canViewBilling && (
               <Card className="flex flex-col gap-4 justify-between">
                 <div>
                   <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">
@@ -722,97 +760,6 @@ export function ProjectDetailsPage() {
               </div>
             </Card>
 
-            {/* Team Members List */}
-            <Card className="md:col-span-2 grid gap-4">
-              <div className="flex justify-between items-center">
-                <h3 className="text-base font-bold">Assigned Team Members</h3>
-                {isAdmin && (
-                  <Button
-                    onClick={() => setShowAddMember(!showAddMember)}
-                    className="h-8 px-2.5 text-xs border border-border bg-transparent"
-                  >
-                    + Add Member
-                  </Button>
-                )}
-              </div>
-
-              {showAddMember && (
-                <form
-                  onSubmit={handleAddMember}
-                  className="flex gap-2 items-end bg-muted/10 p-3 rounded-lg border border-border mb-2"
-                >
-                  <div className="grid gap-1 flex-1">
-                    <label className="text-xs font-semibold text-foreground/60">
-                      Choose Member
-                    </label>
-                    <select
-                      value={newMemberForm.userId}
-                      onChange={(e) =>
-                        setNewMemberForm({ ...newMemberForm, userId: e.target.value })
-                      }
-                      className="h-10 rounded-md border border-border bg-background px-3 text-xs"
-                      required
-                    >
-                      <option value="">Select Staff...</option>
-                      {staff
-                        .filter((s) => !project.projectMembers?.some((tm) => tm.userId === s.id))
-                        .map((s) => (
-                          <option key={s.id} value={s.id}>
-                            {s.firstName} {s.lastName}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                  <div className="grid gap-1 w-48">
-                    <label className="text-xs font-semibold text-foreground/60">Role</label>
-                    <select
-                      value={newMemberForm.role}
-                      onChange={(e) => setNewMemberForm({ ...newMemberForm, role: e.target.value })}
-                      className="h-10 rounded-md border border-border bg-background px-3 text-xs"
-                    >
-                      <option value="Frontend Developer">Frontend</option>
-                      <option value="Backend Developer">Backend</option>
-                      <option value="Full Stack Developer">Full Stack</option>
-                      <option value="UI/UX Designer">UI/UX</option>
-                      <option value="QA Tester">QA Tester</option>
-                      <option value="DevOps">DevOps</option>
-                    </select>
-                  </div>
-                  <Button type="submit">Assign</Button>
-                </form>
-              )}
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                {project.projectMembers?.map((tm) => (
-                  <div
-                    key={tm.userId}
-                    className="flex items-center justify-between border border-border p-3 rounded-lg bg-card"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
-                        {tm.user?.firstName.charAt(0)}
-                      </div>
-                      <div>
-                        <span className="block font-semibold text-sm">
-                          {tm.user?.firstName} {tm.user?.lastName}
-                        </span>
-                        <span className="text-xs text-foreground/50">{tm.role}</span>
-                      </div>
-                    </div>
-                    {isAdmin && tm.role !== 'Project Manager' && (
-                      <button
-                        onClick={() => handleRemoveMember(tm.userId)}
-                        className="p-1.5 text-danger hover:bg-danger/10 rounded-md text-xs"
-                        type="button"
-                      >
-                        Remove
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </Card>
-
             {/* General Info */}
             <Card className="grid gap-4">
               <h3 className="text-base font-bold">Project Details</h3>
@@ -821,6 +768,170 @@ export function ProjectDetailsPage() {
           </div>
         )}
 
+        {/* --- MEMBERS TAB --- */}
+        {activeTab === 'members' && (
+          <div className="grid gap-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold">Project Members</h2>
+                <p className="text-sm text-foreground/55">
+                  Responsibilities here apply only to this project.
+                </p>
+              </div>
+              {canManageMembers && (
+                <Button onClick={() => setShowAddMember((open) => !open)}>
+                  <Plus className="h-4 w-4" /> Add Member
+                </Button>
+              )}
+            </div>
+
+            {showAddMember && canManageMembers && (
+              <Card>
+                <form
+                  onSubmit={handleAddMember}
+                  className="grid gap-4 md:grid-cols-[1fr_240px_auto] md:items-end"
+                >
+                  <div className="grid gap-1.5">
+                    <label className="text-xs font-semibold text-foreground/60">Select Staff</label>
+                    <select
+                      value={newMemberForm.userId}
+                      onChange={(event) =>
+                        setNewMemberForm({ ...newMemberForm, userId: event.target.value })
+                      }
+                      className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                      required
+                    >
+                      <option value="">Choose a Staff member...</option>
+                      {staff
+                        .filter(
+                          (member) =>
+                            !project.projectMembers?.some(
+                              (assignment) => assignment.userId === member.id,
+                            ),
+                        )
+                        .map((member) => (
+                          <option key={member.id} value={member.id}>
+                            {member.firstName} {member.lastName}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-1.5">
+                    <label className="text-xs font-semibold text-foreground/60">Project Role</label>
+                    <select
+                      value={newMemberForm.projectRole}
+                      onChange={(event) =>
+                        setNewMemberForm({
+                          ...newMemberForm,
+                          projectRole: event.target.value as ProjectRole,
+                        })
+                      }
+                      className="h-10 rounded-md border border-border bg-background px-3 text-sm"
+                    >
+                      {projectRoles.map((projectRole) => (
+                        <option key={projectRole} value={projectRole}>
+                          {projectRoleLabels[projectRole]}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <Button type="submit">Assign</Button>
+                </form>
+              </Card>
+            )}
+
+            <div className="overflow-hidden rounded-lg border border-border bg-card">
+              <div className="hidden grid-cols-[minmax(220px,1fr)_220px_150px] gap-4 border-b border-border bg-muted/20 px-5 py-3 text-xs font-bold uppercase text-foreground/50 md:grid">
+                <span>Member</span>
+                <span>Project Role</span>
+                <span className="text-right">Actions</span>
+              </div>
+              {project.projectMembers?.length ? (
+                project.projectMembers.map((assignment) => (
+                  <div
+                    key={assignment.userId}
+                    className="grid gap-3 border-b border-border/60 px-5 py-4 last:border-b-0 md:grid-cols-[minmax(220px,1fr)_220px_150px] md:items-center"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      {assignment.user?.avatar ? (
+                        <img
+                          src={assignment.user.avatar}
+                          alt=""
+                          className="h-10 w-10 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                          {assignment.user?.firstName?.charAt(0)}
+                          {assignment.user?.lastName?.charAt(0)}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold">
+                          {assignment.user?.firstName} {assignment.user?.lastName}
+                        </p>
+                        <p className="truncate text-xs text-foreground/50">
+                          {assignment.user?.email}
+                        </p>
+                      </div>
+                    </div>
+
+                    {editingMemberId === assignment.userId ? (
+                      <select
+                        autoFocus
+                        value={assignment.projectRole}
+                        onChange={(event) =>
+                          handleChangeMemberRole(
+                            assignment.userId,
+                            event.target.value as ProjectRole,
+                          )
+                        }
+                        onBlur={() => setEditingMemberId(null)}
+                        className="h-9 rounded-md border border-border bg-background px-2 text-sm"
+                      >
+                        {projectRoles.map((projectRole) => (
+                          <option key={projectRole} value={projectRole}>
+                            {projectRoleLabels[projectRole]}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="w-fit rounded-md border border-primary/20 bg-primary/10 px-2.5 py-1 text-xs font-bold text-primary">
+                        {projectRoleLabels[assignment.projectRole]}
+                      </span>
+                    )}
+
+                    <div className="flex justify-end gap-1">
+                      {canManageMembers && (
+                        <>
+                          <button
+                            type="button"
+                            title="Change project role"
+                            onClick={() => setEditingMemberId(assignment.userId)}
+                            className="rounded-md p-2 text-foreground/55 hover:bg-muted hover:text-foreground"
+                          >
+                            <UserRoundCog className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title="Remove member"
+                            onClick={() => handleRemoveMember(assignment.userId)}
+                            className="rounded-md p-2 text-danger hover:bg-danger/10"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="px-5 py-12 text-center text-sm text-foreground/50">
+                  No Staff members are assigned to this project.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         {/* --- MILESTONES TAB --- */}
         {activeTab === 'milestones' && (
           <div className="grid gap-6">
@@ -1184,7 +1295,7 @@ export function ProjectDetailsPage() {
                   {approvedHours.toFixed(2)} hrs
                 </span>
               </div>
-              {isAdmin && (
+              {canViewBilling && (
                 <div className="rounded border border-border bg-background p-3">
                   <span className="block text-[10px] font-bold uppercase text-foreground/45">
                     Approved Billable Value
@@ -1236,7 +1347,7 @@ export function ProjectDetailsPage() {
                           {log.task?.title || 'No task linked'}
                         </td>
                         <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
-                        {isAdmin && (
+                        {canViewBilling && (
                           <td className="px-5 py-3.5 font-bold text-emerald-600">
                             {log.billable
                               ? `$${(Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0)).toLocaleString()}`
@@ -1263,7 +1374,7 @@ export function ProjectDetailsPage() {
         )}
 
         {/* --- BILLING / INVOICES TAB --- */}
-        {(activeTab === 'billing' || activeTab === 'invoices') && isAdmin && (
+        {(activeTab === 'billing' || activeTab === 'invoices') && canViewBilling && (
           <div className="grid gap-6">
             {/* 1. Summary Cards */}
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
@@ -1748,11 +1859,11 @@ export function ProjectDetailsPage() {
               </Card>
             </div>
 
-            {/* Developer and Task breakdowns */}
+            {/* Staff and task breakdowns */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
                 <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
-                  <User className="h-4.5 w-4.5 text-primary" /> Developer Breakdown
+                  <User className="h-4.5 w-4.5 text-primary" /> Staff Breakdown
                 </h3>
                 <div className="space-y-4 text-xs font-semibold">
                   {(() => {

@@ -4,9 +4,27 @@ import { taskRepository } from '../repositories/task.repository';
 import { taskActivityService } from '../services/task-activity.service';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
-import { forbidden, notFound } from '../utils/errors';
+import { AppError, forbidden, notFound } from '../utils/errors';
 import fs from 'fs';
 import path from 'path';
+
+async function assertCanUpdateTaskWork(taskId: string, user: NonNullable<Express.Request['user']>) {
+  if (user.role === 'ADMIN') return;
+
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, deletedAt: null },
+    select: {
+      projectId: true,
+      assignees: { where: { id: user.id }, select: { id: true } },
+    },
+  });
+  if (!task) throw notFound('Task not found');
+
+  const canAssign = await AuthorizationService.canAssignTasks(task.projectId, user);
+  if (!canAssign && task.assignees.length === 0) {
+    throw forbidden('You are not assigned to this task');
+  }
+}
 
 export const taskController = {
   async list(req: Request, res: Response) {
@@ -67,13 +85,26 @@ export const taskController = {
       return res.status(400).json({ success: false, message: 'Selected project does not exist' });
     }
 
-    // Verify creator has access to the target project
-    await AuthorizationService.assertProject(body.projectId, user);
+    if (!(await AuthorizationService.canAssignTasks(body.projectId, user))) {
+      throw forbidden(
+        'Only an Admin, Project Manager, or Lead Developer can create and assign tasks',
+      );
+    }
+
+    const assigneeIds = [...new Set((body.assigneeIds ?? []) as string[])];
+    if (assigneeIds.length > 0) {
+      const assignedMemberCount = await prisma.projectMember.count({
+        where: { projectId: body.projectId, userId: { in: assigneeIds } },
+      });
+      if (assignedMemberCount !== assigneeIds.length) {
+        throw new AppError(400, 'Tasks can only be assigned to members of this project');
+      }
+    }
 
     const taskData = {
       ...body,
+      assigneeIds,
       createdBy: user.id,
-      ...(user.role === 'STAFF' ? { assigneeIds: [user.id] } : {}),
     };
 
     const task = await taskRepository.create(taskData);
@@ -95,24 +126,35 @@ export const taskController = {
       throw forbidden('Access denied');
     }
 
-    // Developer restrictions: Can only edit status / checklist / log time if assigned to task
     if (user.role === 'STAFF') {
-      const isAssigned = task.assignees?.some((a: { id: string }) => a.id === user.id);
-      if (!isAssigned) {
+      const canAssign = await AuthorizationService.canAssignTasks(task.projectId, user);
+      const isAssigned = task.assignees?.some(
+        (assignee: { id: string }) => assignee.id === user.id,
+      );
+      if (!canAssign && !isAssigned) {
         throw forbidden('You are not assigned to this task');
       }
 
-      // Prohibit changing project / estimation / critical config
-      const restrictedFields = ['projectId', 'estimatedHours', 'title', 'description', 'priority'];
-      const isModifyingRestricted = restrictedFields.some((field) => body[field] !== undefined);
-      if (isModifyingRestricted) {
-        throw forbidden(
-          'Developers are restricted to editing task status, checklists, and comments',
-        );
+      if (!canAssign) {
+        const restrictedFields = [
+          'projectId',
+          'estimatedHours',
+          'title',
+          'description',
+          'priority',
+          'assigneeIds',
+          'labelIds',
+          'startDate',
+          'dueDate',
+        ];
+        const isModifyingRestricted = restrictedFields.some((field) => body[field] !== undefined);
+        if (isModifyingRestricted) {
+          throw forbidden('Staff can only update the progress of tasks assigned to them');
+        }
       }
     }
 
-    const updated = await taskRepository.update(id, body);
+    await taskRepository.update(id, body);
 
     // Log updates
     if (body.status && body.status !== task.status) {
@@ -158,6 +200,16 @@ export const taskController = {
       throw forbidden('Access denied');
     }
 
+    if (user.role === 'STAFF') {
+      const canAssign = await AuthorizationService.canAssignTasks(task.projectId, user);
+      const isAssigned = task.assignees?.some(
+        (assignee: { id: string }) => assignee.id === user.id,
+      );
+      if (!canAssign && !isAssigned) {
+        throw forbidden('You are not assigned to this task');
+      }
+    }
+
     const updated = await taskRepository.moveTask(id, { status, prevTaskId, nextTaskId });
     await taskActivityService.log(id, 'STATUS_CHANGED', `Task moved to column ${status}`);
 
@@ -194,6 +246,9 @@ export const taskController = {
     }
 
     await AuthorizationService.assertTask(exists.taskId, user);
+    if (user.role !== 'ADMIN' && exists.userId !== user.id) {
+      throw forbidden('You can only edit your own comments');
+    }
 
     const updated = await taskRepository.updateComment(id, comment);
     return ok(res, 'Comment updated successfully', updated);
@@ -209,6 +264,9 @@ export const taskController = {
     }
 
     await AuthorizationService.assertTask(exists.taskId, user);
+    if (user.role !== 'ADMIN' && exists.userId !== user.id) {
+      throw forbidden('You can only delete your own comments');
+    }
 
     await taskRepository.deleteComment(id);
     return ok(res, 'Comment deleted successfully');
@@ -227,6 +285,7 @@ export const taskController = {
       throw forbidden('Access denied');
     }
 
+    await assertCanUpdateTaskWork(id, user);
     const item = await taskRepository.addChecklistItem(id, title);
     await taskActivityService.log(id, 'CHECKLIST_UPDATED', `Checklist item "${title}" was added`);
 
@@ -244,6 +303,7 @@ export const taskController = {
     }
 
     await AuthorizationService.assertTask(item.taskId, user);
+    await assertCanUpdateTaskWork(item.taskId, user);
 
     const updated = await taskRepository.updateChecklistItem(id, body);
     await taskActivityService.log(
@@ -265,6 +325,7 @@ export const taskController = {
     }
 
     await AuthorizationService.assertTask(item.taskId, user);
+    await assertCanUpdateTaskWork(item.taskId, user);
 
     await taskRepository.deleteChecklistItem(id);
     return ok(res, 'Checklist item deleted successfully');
@@ -287,6 +348,7 @@ export const taskController = {
       throw forbidden('Access denied');
     }
 
+    await assertCanUpdateTaskWork(id, user);
     const fileUrl = `/uploads/${file.filename}`;
     const attachment = await taskRepository.addAttachment(id, {
       name: file.originalname,
@@ -314,6 +376,7 @@ export const taskController = {
     }
 
     await AuthorizationService.assertTask(attachment.taskId, user);
+    await assertCanUpdateTaskWork(attachment.taskId, user);
 
     // Delete physical file
     const filePath = path.join(__dirname, '../../uploads', path.basename(attachment.url));

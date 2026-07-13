@@ -75,6 +75,9 @@ export const teamController = {
 
   async getById(req: Request, res: Response) {
     const id = req.params.id!;
+    if (req.user!.role !== 'ADMIN' && req.user!.id !== id) {
+      throw forbidden('You cannot view another team member profile');
+    }
     const item = await teamRepository.findById(id);
     if (!item) {
       throw notFound('Team member profile not found');
@@ -87,7 +90,7 @@ export const teamController = {
     const id = req.params.id!;
     const body = req.body;
 
-    // Check permissions: Admin can edit anyone. Developers/Staff can only edit themselves.
+    // Check permissions: Admin can edit anyone. Staff members/Staff can only edit themselves.
     if (user.role !== 'ADMIN' && user.id !== id) {
       throw forbidden('You cannot edit another team member profile');
     }

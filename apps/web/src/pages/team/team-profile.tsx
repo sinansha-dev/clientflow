@@ -6,7 +6,8 @@ import { Card } from '../../components/ui/card';
 import { useToastStore } from '../../stores/toast-store';
 import { useAuthStore } from '../../stores/auth-store';
 import { errorMessage } from '../../lib/errors';
-import type { TimeLog, Meeting, Task, Project } from '@clientflow/types';
+import { projectRoleLabels } from '@clientflow/shared';
+import type { TimeLog, Meeting, Task, Project, ProjectRole } from '@clientflow/types';
 import {
   Briefcase,
   Calendar,
@@ -39,7 +40,7 @@ interface TeamMemberDetail {
   availabilityStatus: string;
   timezone: string;
   manager?: { id: string; firstName: string; lastName: string } | null;
-  assignedProjects: Array<{ role: string; project: Project }>;
+  assignedProjects: Array<{ projectRole: ProjectRole; project: Project }>;
   assignedTasks: Task[];
   timeLogs: TimeLog[];
   meetingsAttending: Array<{ meeting: Meeting; attendanceStatus: string }>;
@@ -215,7 +216,7 @@ export function TeamProfilePage() {
             </span>
             <span className="flex items-center gap-1.5">
               <Shield className="h-4 w-4 text-primary" />
-              Role: <strong>{member.role}</strong>
+              Global Role: <strong>{member.role === 'STAFF' ? 'Staff' : 'Admin'}</strong>
             </span>
             <span className="flex items-center gap-1.5">
               <Compass className="h-4 w-4" /> Timezone: {member.timezone}
@@ -556,7 +557,7 @@ export function TeamProfilePage() {
                     </span>
                   </div>
                   <span className="text-xs font-bold text-foreground/60 bg-muted px-2.5 py-0.5 rounded">
-                    {t.role}
+                    {projectRoleLabels[t.projectRole]}
                   </span>
                 </Card>
               ))

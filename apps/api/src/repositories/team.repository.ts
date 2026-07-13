@@ -68,6 +68,10 @@ export const teamRepository = {
           assignedProjects: {
             select: {
               projectId: true,
+              projectRole: true,
+              project: {
+                select: { id: true, projectName: true, projectCode: true },
+              },
             },
           },
           assignedTasks: {

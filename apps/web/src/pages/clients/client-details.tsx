@@ -1322,7 +1322,7 @@ export function ClientDetailsPage() {
                 <textarea
                   value={noteContent}
                   onChange={(e) => setNoteContent(e.target.value)}
-                  placeholder="Type internal note here... (Visible only to Admins and Developers)"
+                  placeholder="Type internal note here... (Visible only to Admins and Staff members)"
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   rows={3}
                   required
@@ -1470,11 +1470,11 @@ export function ClientDetailsPage() {
               </Card>
             </div>
 
-            {/* Developer Breakdown */}
+            {/* Staff Breakdown */}
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
                 <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
-                  <Users className="h-4.5 w-4.5 text-primary" /> Developer Breakdown
+                  <Users className="h-4.5 w-4.5 text-primary" /> Staff Breakdown
                 </h3>
                 <div className="space-y-4 text-xs font-semibold">
                   {(() => {

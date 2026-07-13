@@ -2,13 +2,13 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { z } from 'zod';
-import { createProjectSchema } from '@clientflow/shared';
+import { createProjectSchema, projectRoleLabels, projectRoles } from '@clientflow/shared';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { api } from '../../lib/api';
 import { useToastStore } from '../../stores/toast-store';
 import { errorMessage } from '../../lib/errors';
-import type { AuthUser, Client } from '@clientflow/types';
+import type { AuthUser, Client, ProjectRole } from '@clientflow/types';
 
 type ProjectInput = z.infer<typeof createProjectSchema>;
 
@@ -25,7 +25,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
 
   // Additional state to manage team members assignments in wizard UI
   const [projectMembersInput, setTeamMembersInput] = useState<
-    Array<{ userId: string; role: string }>
+    Array<{ userId: string; projectRole: ProjectRole }>
   >([]);
 
   const form = useForm<ProjectInput>({
@@ -61,7 +61,9 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
           api.get('/users/staff'),
         ]);
         setClients(cliRes.data.data?.items ?? []);
-        setStaff(usrRes.data.data?.users ?? []);
+        setStaff(
+          (usrRes.data.data?.users ?? []).filter((member: AuthUser) => member.role === 'STAFF'),
+        );
       } catch (err) {
         console.error('Failed to load project details selection options:', err);
         notify({
@@ -96,14 +98,14 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
 
   // Team members adding/removing helpers
   const addTeamMember = () => {
-    setTeamMembersInput((prev) => [...prev, { userId: '', role: 'Frontend Developer' }]);
+    setTeamMembersInput((prev) => [...prev, { userId: '', projectRole: 'DEVELOPER' }]);
   };
 
   const removeTeamMember = (index: number) => {
     setTeamMembersInput((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const updateTeamMember = (index: number, key: 'userId' | 'role', value: string) => {
+  const updateTeamMember = (index: number, key: 'userId' | 'projectRole', value: string) => {
     setTeamMembersInput((prev) =>
       prev.map((tm, i) => (i === index ? { ...tm, [key]: value } : tm)),
     );
@@ -303,7 +305,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                   )}
                   {staff.length === 0 && (
                     <span className="text-xs text-warning">
-                      No admin or developer users are available. Add team members first.
+                      No active Staff users are available. Add team members first.
                     </span>
                   )}
                 </div>
@@ -343,16 +345,15 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                         </select>
 
                         <select
-                          value={tm.role}
-                          onChange={(e) => updateTeamMember(idx, 'role', e.target.value)}
+                          value={tm.projectRole}
+                          onChange={(e) => updateTeamMember(idx, 'projectRole', e.target.value)}
                           className="h-10 w-44 rounded-md border border-border bg-background px-2 text-xs"
                         >
-                          <option value="Frontend Developer">Frontend</option>
-                          <option value="Backend Developer">Backend</option>
-                          <option value="Full Stack Developer">Full Stack</option>
-                          <option value="UI/UX Designer">UI/UX Designer</option>
-                          <option value="QA Tester">QA Tester</option>
-                          <option value="DevOps">DevOps</option>
+                          {projectRoles.map((projectRole) => (
+                            <option key={projectRole} value={projectRole}>
+                              {projectRoleLabels[projectRole]}
+                            </option>
+                          ))}
                         </select>
 
                         <button
@@ -438,7 +439,9 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                               return (
                                 <li key={i}>
                                   {u?.firstName} {u?.lastName} &mdash;{' '}
-                                  <span className="italic">{tm.role}</span>
+                                  <span className="italic">
+                                    {projectRoleLabels[tm.projectRole]}
+                                  </span>
                                 </li>
                               );
                             })}

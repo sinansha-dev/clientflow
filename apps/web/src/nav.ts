@@ -23,7 +23,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'STAFF'] },
-  { label: 'Clients', href: '/clients', icon: UsersRound, roles: ['ADMIN'] },
+  { label: 'Clients', href: '/clients', icon: UsersRound, roles: ['ADMIN', 'STAFF'] },
   { label: 'Projects', href: '/projects', icon: FolderKanban, roles: ['ADMIN', 'STAFF'] },
   {
     label: 'Client Portal',
@@ -34,8 +34,8 @@ export const navItems: NavItem[] = [
   { label: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['ADMIN', 'STAFF'] },
   { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'STAFF'] },
   { label: 'Calendar', href: '/calendar', icon: CalendarDays, roles: ['ADMIN', 'STAFF'] },
-  { label: 'Team', href: '/team', icon: Users, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Team', href: '/team', icon: Users, roles: ['ADMIN'] },
   { label: 'Finance', href: '/invoices', icon: CreditCard, roles: ['ADMIN'] },
-  { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['ADMIN'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN'] },
 ];

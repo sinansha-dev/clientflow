@@ -47,7 +47,19 @@ export function TasksBoard({ projectId: scopedProjectId }: TasksBoardProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createModalDefaultStatus, setCreateModalDefaultStatus] = useState<string>('TODO');
 
-  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
+  const creatableProjects = projects.filter((project) => {
+    if (user?.role === 'ADMIN') return true;
+    const projectRole = project.projectMembers?.find(
+      (member) => member.userId === user?.id,
+    )?.projectRole;
+    return projectRole === 'PROJECT_MANAGER' || projectRole === 'LEAD_DEVELOPER';
+  });
+  const activeProjectId = scopedProjectId || projectId;
+  const canCreateTasks =
+    user?.role === 'ADMIN' ||
+    (activeProjectId === 'ALL'
+      ? creatableProjects.length > 0
+      : creatableProjects.some((project) => project.id === activeProjectId));
 
   const loadFilterOptions = async () => {
     try {
@@ -221,9 +233,9 @@ export function TasksBoard({ projectId: scopedProjectId }: TasksBoardProps) {
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onSuccess={loadTasks}
-        projects={projects}
+        projects={creatableProjects}
         defaultStatus={createModalDefaultStatus}
-        defaultProjectId={scopedProjectId || (projects[0]?.id ?? '')}
+        defaultProjectId={scopedProjectId || (creatableProjects[0]?.id ?? '')}
       />
 
       {/* Task Drawer details */}

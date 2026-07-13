@@ -37,20 +37,17 @@ export const clientRepository = {
       ...(country && country !== 'ALL' ? { country } : {}),
       ...(currentUser?.role === 'STAFF'
         ? {
-            OR: [
-              { assignedManagerId: currentUser.id },
-              {
-                projects: {
+            projects: {
+              some: {
+                deletedAt: null,
+                projectMembers: {
                   some: {
-                    deletedAt: null,
-                    OR: [
-                      { projectManagerId: currentUser.id },
-                      { projectMembers: { some: { userId: currentUser.id } } },
-                    ],
+                    userId: currentUser.id,
+                    projectRole: 'PROJECT_MANAGER',
                   },
                 },
               },
-            ],
+            },
           }
         : {
             ...(managerId && managerId !== 'ALL' ? { assignedManagerId: managerId } : {}),
@@ -134,7 +131,7 @@ export const clientRepository = {
       if (!isManager) {
         const projectIds = await prisma.projectMember
           .findMany({
-            where: { userId: currentUser.id },
+            where: { userId: currentUser.id, projectRole: 'PROJECT_MANAGER' },
             select: { projectId: true },
           })
           .then((pts: { projectId: string }[]) =>

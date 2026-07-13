@@ -3,6 +3,8 @@ import { meetingRepository } from '../repositories/meeting.repository';
 import { calendarRepository } from '../repositories/calendar.repository';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
+import { AuthorizationService } from '../services/authorization.service';
+import { prisma } from '../config/prisma';
 
 export const meetingController = {
   // --- Meeting Controllers ---
@@ -10,7 +12,14 @@ export const meetingController = {
     const user = req.user!;
     const { projectId, startDate, endDate } = req.query;
 
-    const filterUserId = user.role === 'CLIENT' ? undefined : user.id;
+    if (projectId) {
+      await AuthorizationService.assertProject(projectId as string, user);
+    }
+
+    const canManageProjectMeetings =
+      user.role === 'ADMIN' ||
+      (!!projectId && (await AuthorizationService.canManageMeetings(projectId as string, user)));
+    const filterUserId = canManageProjectMeetings || user.role === 'CLIENT' ? undefined : user.id;
 
     const params: any = {
       projectId: projectId as string,
@@ -41,9 +50,8 @@ export const meetingController = {
     const meeting = await meetingRepository.findById(id);
     if (!meeting) throw notFound('Meeting not found');
 
-    if (user.role === 'CLIENT') {
-      const isInvited = meeting.participants?.some((p: any) => p.userId === user.id);
-      if (!isInvited) throw forbidden('Access denied');
+    if (!(await AuthorizationService.canAccessMeeting(id, user))) {
+      throw forbidden('Access denied');
     }
 
     return ok(res, 'Meeting details retrieved successfully', meeting);
@@ -52,6 +60,13 @@ export const meetingController = {
   async createMeeting(req: Request, res: Response) {
     const user = req.user!;
     const body = req.body;
+
+    if (
+      user.role !== 'ADMIN' &&
+      (!body.projectId || !(await AuthorizationService.canManageMeetings(body.projectId, user)))
+    ) {
+      throw forbidden('Only an Admin or Project Manager can schedule project meetings');
+    }
 
     const meeting = await meetingRepository.create({
       ...body,
@@ -69,8 +84,11 @@ export const meetingController = {
     const meeting = await meetingRepository.findById(id);
     if (!meeting) throw notFound('Meeting not found');
 
-    if (user.role !== 'ADMIN' && meeting.organizerId !== user.id) {
-      throw forbidden('Only the organizer or an admin can edit this meeting');
+    const canManageProject =
+      !!meeting.projectId &&
+      (await AuthorizationService.canManageMeetings(meeting.projectId, user));
+    if (user.role !== 'ADMIN' && !canManageProject && meeting.organizerId !== user.id) {
+      throw forbidden('Only the organizer, Project Manager, or an Admin can edit this meeting');
     }
 
     const updated = await meetingRepository.update(id, body);
@@ -84,8 +102,11 @@ export const meetingController = {
     const meeting = await meetingRepository.findById(id);
     if (!meeting) throw notFound('Meeting not found');
 
-    if (user.role !== 'ADMIN' && meeting.organizerId !== user.id) {
-      throw forbidden('Only the organizer or an admin can cancel this meeting');
+    const canManageProject =
+      !!meeting.projectId &&
+      (await AuthorizationService.canManageMeetings(meeting.projectId, user));
+    if (user.role !== 'ADMIN' && !canManageProject && meeting.organizerId !== user.id) {
+      throw forbidden('Only the organizer, Project Manager, or an Admin can cancel this meeting');
     }
 
     await meetingRepository.delete(id);
@@ -123,6 +144,9 @@ export const meetingController = {
     const user = req.user!;
     const body = req.body;
 
+    if (body.projectId) {
+      await AuthorizationService.assertProject(body.projectId, user);
+    }
     const event = await calendarRepository.createEvent({
       ...body,
       userId: user.id,
@@ -132,15 +156,30 @@ export const meetingController = {
   },
 
   async updateCalendarEvent(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
+    const event = await prisma.calendarEvent.findUnique({ where: { id } });
+    if (!event) throw notFound('Calendar event not found');
+    if (user.role !== 'ADMIN' && event.userId !== user.id) {
+      throw forbidden('You can only update your own calendar events');
+    }
+    if (body.projectId) {
+      await AuthorizationService.assertProject(body.projectId, user);
+    }
 
     const updated = await calendarRepository.updateEvent(id, body);
     return ok(res, 'Calendar event updated successfully', updated);
   },
 
   async deleteCalendarEvent(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
+    const event = await prisma.calendarEvent.findUnique({ where: { id } });
+    if (!event) throw notFound('Calendar event not found');
+    if (user.role !== 'ADMIN' && event.userId !== user.id) {
+      throw forbidden('You can only delete your own calendar events');
+    }
     await calendarRepository.deleteEvent(id);
     return ok(res, 'Calendar event deleted successfully');
   },

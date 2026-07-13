@@ -4,6 +4,7 @@ import { prisma } from '../config/prisma';
 import { portalRepository } from '../repositories/portal.repository';
 import { forbidden, notFound } from '../utils/errors';
 import { env } from '../config/env';
+import { AuthorizationService } from './authorization.service';
 
 export interface PortalUser {
   id: string;
@@ -118,6 +119,9 @@ export const portalService = {
   ) {
     const user = toPortalUser(requestUser);
     const project = await this.assertProjectAccess(projectId, user);
+    if (user.role === 'STAFF' && !(await AuthorizationService.canManageFiles(projectId, user))) {
+      throw forbidden('Your project role does not allow file uploads');
+    }
     if (!file) {
       throw notFound('No file uploaded');
     }
@@ -184,8 +188,8 @@ export const portalService = {
     const file = await portalRepository.findFileById(fileId);
     if (!file) throw notFound('File not found');
     await this.assertProjectAccess(file.projectId, user);
-    if (!canManage(user) && data.visibility) {
-      throw forbidden('Clients cannot change file visibility');
+    if (data.visibility && !(await AuthorizationService.canManageFiles(file.projectId, user))) {
+      throw forbidden('You cannot change file visibility for this project');
     }
     const updated = await portalRepository.updateFile(fileId, data);
     await portalRepository.logActivity(
@@ -202,8 +206,8 @@ export const portalService = {
     const file = await portalRepository.findFileById(fileId);
     if (!file) throw notFound('File not found');
     await this.assertProjectAccess(file.projectId, user);
-    if (user.role !== 'ADMIN') {
-      throw forbidden('Only admins can delete files');
+    if (!(await AuthorizationService.canManageFiles(file.projectId, user))) {
+      throw forbidden('You cannot delete files from this project');
     }
     await portalRepository.softDeleteFile(fileId);
     await portalRepository.logActivity(
@@ -245,7 +249,9 @@ export const portalService = {
   ) {
     const user = toPortalUser(requestUser);
     await this.assertProjectAccess(data.projectId, user);
-    if (!canManage(user)) throw forbidden('Only agency users can manage folders');
+    if (!(await AuthorizationService.canManageFiles(data.projectId, user))) {
+      throw forbidden('You cannot manage folders in this project');
+    }
     const folder = await portalRepository.createFolder(data);
     await portalRepository.logActivity(
       data.projectId,
@@ -262,19 +268,23 @@ export const portalService = {
     data: { folderName?: string; parentFolderId?: string | null },
   ) {
     const user = toPortalUser(requestUser);
-    if (!canManage(user)) throw forbidden('Only agency users can manage folders');
     const folder = await prisma.portalFolder.findFirst({ where: { id, deletedAt: null } });
     if (!folder) throw notFound('Folder not found');
     await this.assertProjectAccess(folder.projectId, user);
+    if (!(await AuthorizationService.canManageFiles(folder.projectId, user))) {
+      throw forbidden('You cannot manage folders in this project');
+    }
     return portalRepository.updateFolder(id, data);
   },
 
   async deleteFolder(id: string, requestUser: Express.Request['user']) {
     const user = toPortalUser(requestUser);
-    if (!canManage(user)) throw forbidden('Only agency users can manage folders');
     const folder = await prisma.portalFolder.findFirst({ where: { id, deletedAt: null } });
     if (!folder) throw notFound('Folder not found');
     await this.assertProjectAccess(folder.projectId, user);
+    if (!(await AuthorizationService.canManageFiles(folder.projectId, user))) {
+      throw forbidden('You cannot manage folders in this project');
+    }
     return portalRepository.softDeleteFolder(id);
   },
 

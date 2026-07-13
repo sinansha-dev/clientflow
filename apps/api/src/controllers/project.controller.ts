@@ -4,9 +4,46 @@ import { projectRepository } from '../repositories/project.repository';
 import { projectActivityService } from '../services/project-activity.service';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
-import { forbidden, notFound } from '../utils/errors';
+import { AppError, forbidden, notFound } from '../utils/errors';
+import type { ProjectRole } from '@clientflow/types';
+import { projectRoleLabels } from '@clientflow/shared';
 import fs from 'fs';
 import path from 'path';
+
+async function assertAssignableStaff(userId: string) {
+  const member = await prisma.user.findFirst({
+    where: { id: userId, role: 'STAFF', status: 'ACTIVE', deletedAt: null },
+    select: { id: true },
+  });
+  if (!member) {
+    throw new AppError(400, 'Only active Staff users can be assigned to projects');
+  }
+}
+
+async function movePrimaryManagerBeforeRemoval(projectId: string, userId: string) {
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { projectManagerId: true },
+  });
+  if (project?.projectManagerId !== userId) return;
+
+  const replacement = await prisma.projectMember.findFirst({
+    where: { projectId, userId: { not: userId }, projectRole: 'PROJECT_MANAGER' },
+    select: { userId: true },
+    orderBy: { joinedAt: 'asc' },
+  });
+  if (!replacement) {
+    throw new AppError(
+      400,
+      'Assign another Project Manager before changing or removing this member',
+    );
+  }
+
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { projectManagerId: replacement.userId },
+  });
+}
 
 export const projectController = {
   async list(req: Request, res: Response) {
@@ -72,6 +109,12 @@ export const projectController = {
       return res.status(400).json({ success: false, message: 'Selected client does not exist' });
     }
 
+    const assignmentIds = [
+      body.projectManagerId,
+      ...(projectMembers ?? []).map((member: { userId: string }) => member.userId),
+    ];
+    await Promise.all([...new Set(assignmentIds)].map(assertAssignableStaff));
+
     // Map creator, convert date strings to Date objects, and pass projectMembers as projectMembersInput
     const projectData = {
       ...body,
@@ -104,13 +147,17 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
-    // Developer restrictions: Cannot edit budget, owner (manager), client, or priority
+    if (!(await AuthorizationService.canManageProject(id, user))) {
+      throw forbidden("Only an Admin or this project's Project Manager can edit project settings");
+    }
+
+    // Staff Project Managers cannot change billing, client, or primary manager settings.
     if (user.role === 'STAFF') {
       const restrictedFields = ['budget', 'projectManagerId', 'clientId', 'projectCode'];
       const isModifyingRestricted = restrictedFields.some((field) => body[field] !== undefined);
       if (isModifyingRestricted) {
         throw forbidden(
-          'Developers are not permitted to change billing, client, or manager settings',
+          'Staff members are not permitted to change billing, client, or primary manager settings',
         );
       }
     }
@@ -144,7 +191,21 @@ export const projectController = {
       updateData.deadline = new Date(body.deadline);
     }
 
+    if (user.role === 'ADMIN' && body.projectManagerId !== undefined) {
+      await assertAssignableStaff(body.projectManagerId);
+    }
+
     const updated = await projectRepository.update(id, updateData);
+
+    if (user.role === 'ADMIN' && body.projectManagerId !== undefined) {
+      await projectRepository.addProjectMember(
+        id,
+        body.projectManagerId,
+        'PROJECT_MANAGER',
+        user.id,
+      );
+    }
+
     await projectActivityService.log(id, 'PROJECT_UPDATED', `Project details were updated`);
 
     return ok(res, 'Project updated successfully', updated);
@@ -196,10 +257,20 @@ export const projectController = {
     return ok(res, 'Project deleted successfully');
   },
 
-  // Team Management Controllers
+  // Project member management
+  async listProjectMembers(req: Request, res: Response) {
+    const id = req.params.id!;
+    await AuthorizationService.assertProject(id, req.user!);
+    const members = await projectRepository.listProjectMembers(id);
+    return ok(res, 'Project members loaded successfully', members);
+  },
+
   async addTeamMember(req: Request, res: Response) {
     const id = req.params.id!;
-    const { userId, role } = req.body;
+    const { userId, projectRole } = req.body as {
+      userId: string;
+      projectRole: ProjectRole;
+    };
 
     const project = await projectRepository.findById(id);
     if (!project) {
@@ -211,11 +282,20 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
-    const member = await projectRepository.addProjectMember(id, userId, role);
+    if (req.user!.role === 'STAFF' && req.user!.id === userId) {
+      throw forbidden('Staff cannot assign themselves to a project');
+    }
+    await assertAssignableStaff(userId);
+
+    const member = await projectRepository.addProjectMember(id, userId, projectRole, req.user!.id);
+    if (projectRole === 'PROJECT_MANAGER') {
+      await prisma.project.update({ where: { id }, data: { projectManagerId: userId } });
+    }
+
     await projectActivityService.log(
       id,
       'MEMBER_ADDED',
-      `Team member ${member.user?.firstName} ${member.user?.lastName} was added as ${role}`,
+      `Team member ${member.user?.firstName} ${member.user?.lastName} was added as ${projectRoleLabels[projectRole]}`,
     );
 
     return ok(res, 'Team member added successfully', member);
@@ -224,7 +304,7 @@ export const projectController = {
   async updateTeamMember(req: Request, res: Response) {
     const id = req.params.id as string;
     const userId = req.params.userId as string;
-    const { role } = req.body;
+    const { projectRole } = req.body as { projectRole: ProjectRole };
 
     const exists = await prisma.projectMember.findFirst({ where: { projectId: id, userId } });
     if (!exists) {
@@ -236,11 +316,24 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
-    const updated = await projectRepository.updateProjectMemberRole(id, userId, role);
+    if (req.user!.role === 'STAFF' && req.user!.id === userId) {
+      throw forbidden('Project Managers cannot change their own project role');
+    }
+    await assertAssignableStaff(userId);
+
+    if (projectRole !== 'PROJECT_MANAGER') {
+      await movePrimaryManagerBeforeRemoval(id, userId);
+    }
+
+    const updated = await projectRepository.updateProjectMemberRole(id, userId, projectRole);
+    if (projectRole === 'PROJECT_MANAGER') {
+      await prisma.project.update({ where: { id }, data: { projectManagerId: userId } });
+    }
+
     await projectActivityService.log(
       id,
       'MEMBER_UPDATED',
-      `Team member role was updated to ${role}`,
+      `Team member role was updated to ${projectRoleLabels[projectRole]}`,
     );
 
     return ok(res, 'Team member role updated successfully', updated);
@@ -260,6 +353,11 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
+    if (req.user!.role === 'STAFF' && req.user!.id === userId) {
+      throw forbidden('Project Managers cannot remove themselves from a project');
+    }
+
+    await movePrimaryManagerBeforeRemoval(id, userId);
     await projectRepository.removeProjectMember(id, userId);
     await projectActivityService.log(
       id,
@@ -295,6 +393,7 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
+    await AuthorizationService.assertProjectPermission(id, user, 'project:manage');
     const milestone = await projectRepository.addMilestone(id, body);
     await projectActivityService.log(
       id,
@@ -315,7 +414,7 @@ export const projectController = {
       throw notFound('Milestone not found');
     }
 
-    await AuthorizationService.assertProject(milestone.projectId, user);
+    await AuthorizationService.assertProjectPermission(milestone.projectId, user, 'project:manage');
 
     const updated = await projectRepository.updateMilestone(id, milestone.projectId, body);
     if (body.status && body.status !== milestone.status) {
@@ -338,7 +437,7 @@ export const projectController = {
       throw notFound('Milestone not found');
     }
 
-    await AuthorizationService.assertProject(milestone.projectId, user);
+    await AuthorizationService.assertProjectPermission(milestone.projectId, user, 'project:manage');
 
     await projectRepository.deleteMilestone(id, milestone.projectId);
     await projectActivityService.log(
@@ -429,6 +528,7 @@ export const projectController = {
       throw forbidden('Access denied');
     }
 
+    await AuthorizationService.assertProjectPermission(id, user, 'project:manage');
     const deployment = await projectRepository.addDeployment(id, body);
     await projectActivityService.log(
       id,
@@ -448,7 +548,11 @@ export const projectController = {
       throw notFound('Deployment not found');
     }
 
-    await AuthorizationService.assertProject(deployment.projectId, user);
+    await AuthorizationService.assertProjectPermission(
+      deployment.projectId,
+      user,
+      'project:manage',
+    );
 
     await projectRepository.deleteDeployment(id);
     return ok(res, 'Deployment deleted successfully');

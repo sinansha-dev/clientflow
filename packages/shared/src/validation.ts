@@ -97,7 +97,14 @@ export const clientNoteSchema = z.object({
 
 export const projectTeamMemberSchema = z.object({
   userId: uuidSchema,
-  role: z.enum(['Project Manager', 'Lead Developer', 'Developer', 'Designer', 'QA', 'Viewer']),
+  projectRole: z.enum([
+    'PROJECT_MANAGER',
+    'LEAD_DEVELOPER',
+    'DEVELOPER',
+    'DESIGNER',
+    'QA',
+    'VIEWER',
+  ]),
 });
 
 export const createProjectBaseSchema = z.object({

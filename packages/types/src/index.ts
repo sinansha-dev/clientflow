@@ -1,4 +1,6 @@
 export type Role = 'ADMIN' | 'STAFF' | 'CLIENT';
+export type ProjectRole =
+  'PROJECT_MANAGER' | 'LEAD_DEVELOPER' | 'DEVELOPER' | 'DESIGNER' | 'QA' | 'VIEWER';
 export type UserStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 
 export interface AuthUser {
@@ -118,7 +120,7 @@ export interface Project {
   updatedAt: string | Date;
   archivedAt?: string | Date | null;
   deletedAt?: string | Date | null;
-  projectMembers?: ProjectTeam[];
+  projectMembers?: ProjectMember[];
   milestones?: Milestone[];
   notes?: ProjectNote[];
   files?: ProjectFile[];
@@ -134,12 +136,14 @@ export interface Project {
   recurringServices?: RecurringService[];
 }
 
-export interface ProjectTeam {
+export interface ProjectMember {
+  id: string;
   projectId: string;
   userId: string;
   user?: AuthUser;
-  role: string;
-  joinedDate: string | Date;
+  projectRole: ProjectRole;
+  joinedAt: string | Date;
+  assignedById?: string | null;
 }
 
 export interface Milestone {

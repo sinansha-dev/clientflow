@@ -73,7 +73,7 @@ const upload = multer({
 clientRoutes.use(requireAuth);
 
 // --- Clients Endpoints ---
-clientRoutes.get('/', requireRole('ADMIN'), (req, res, next) =>
+clientRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   clientController.list(req, res).catch(next),
 );
 
@@ -88,13 +88,16 @@ clientRoutes.post(
   validate(portalLoginSchema),
   (req, res, next) => clientController.createPortalLogin(req, res).catch(next),
 );
-clientRoutes.get('/:id', requireRole('ADMIN'), validate(idParams, 'params'), (req, res, next) =>
-  clientController.getById(req, res).catch(next),
+clientRoutes.get(
+  '/:id',
+  requireRole('ADMIN', 'STAFF'),
+  validate(idParams, 'params'),
+  (req, res, next) => clientController.getById(req, res).catch(next),
 );
 
 clientRoutes.patch(
   '/:id',
-  requireRole('ADMIN'), // Developers restricted
+  requireRole('ADMIN'), // Staff members restricted
   validate(idParams, 'params'),
   validate(updateClientSchema),
   (req, res, next) => clientController.update(req, res).catch(next),

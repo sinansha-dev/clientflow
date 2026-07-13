@@ -2,13 +2,26 @@ import type { Request, Response } from 'express';
 import { timelogRepository } from '../repositories/timelog.repository';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
+import { AuthorizationService } from '../services/authorization.service';
 
 export const timelogController = {
   async list(req: Request, res: Response) {
     const user = req.user!;
     const { userId, projectId, taskId, status, startDate, endDate } = req.query;
 
-    const filterUserId = user.role === 'ADMIN' ? (userId as string) : user.id;
+    if (projectId) {
+      await AuthorizationService.assertProject(projectId as string, user);
+    }
+
+    const canViewProjectLogs =
+      user.role === 'ADMIN' ||
+      (!!projectId &&
+        (await AuthorizationService.hasProjectPermission(
+          projectId as string,
+          user,
+          'timesheets:view',
+        )));
+    const filterUserId = canViewProjectLogs ? (userId as string) : user.id;
 
     const params: Parameters<typeof timelogRepository.list>[0] = {
       projectId: projectId as string,
@@ -28,6 +41,7 @@ export const timelogController = {
     const user = req.user!;
     const body = req.body;
 
+    await AuthorizationService.assertProjectPermission(body.projectId, user, 'timesheets:log');
     const log = await timelogRepository.createManualEntry(user.id, body);
     return ok(res, 'Time log entry added successfully', log, 201);
   },
@@ -78,6 +92,7 @@ export const timelogController = {
     const user = req.user!;
     const { projectId, taskId, description } = req.body;
 
+    await AuthorizationService.assertProjectPermission(projectId, user, 'timesheets:log');
     const timer = await timelogRepository.startTimer({
       userId: user.id,
       projectId,
@@ -126,12 +141,24 @@ export const timelogController = {
     const user = req.user!;
     const { startDate, endDate, projectId, userId } = req.query;
 
-    // Developer can only view own productivity data. Client cannot access productivity at all.
+    // Staff can only view their own productivity unless their project role grants report access.
     if (user.role === 'CLIENT') {
       throw forbidden('Access denied');
     }
 
-    const filterUserId = user.role === 'ADMIN' ? (userId as string) : user.id;
+    if (projectId) {
+      await AuthorizationService.assertProject(projectId as string, user);
+    }
+
+    const canViewProjectLogs =
+      user.role === 'ADMIN' ||
+      (!!projectId &&
+        (await AuthorizationService.hasProjectPermission(
+          projectId as string,
+          user,
+          'timesheets:view',
+        )));
+    const filterUserId = canViewProjectLogs ? (userId as string) : user.id;
 
     const report = await timelogRepository.getProductivityReport({
       startDate: startDate as string,

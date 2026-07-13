@@ -1,5 +1,8 @@
 import { prisma } from '../config/prisma';
 import type { Role } from '@prisma/client';
+import type { ProjectRole } from '@clientflow/types';
+import { canUseProjectPermission, type ProjectPermission } from '@clientflow/shared';
+import { forbidden } from '../utils/errors';
 
 export interface UserContext {
   id: string;
@@ -8,38 +11,38 @@ export interface UserContext {
 }
 
 export const AuthorizationService = {
-  /**
-   * Resolves the active project role for a user.
-   * Checks both explicit ProjectMember records and legacy projectManagerId fields.
-   */
-  async getMemberRole(projectId: string, userId: string): Promise<string | null> {
+  async getMemberRole(projectId: string, userId: string): Promise<ProjectRole | null> {
     const member = await prisma.projectMember.findUnique({
       where: {
         projectId_userId: { projectId, userId },
       },
       select: { projectRole: true },
     });
-    if (member) return member.projectRole;
 
-    const project = await prisma.project.findFirst({
-      where: { id: projectId },
-      select: { projectManagerId: true },
-    });
-    if (project?.projectManagerId === userId) {
-      return 'Project Manager';
-    }
-    return null;
+    return (member?.projectRole as ProjectRole | undefined) ?? null;
   },
 
-  /**
-   * Helper to verify if a user has access to a project.
-   */
+  async hasProjectPermission(
+    projectId: string,
+    user: UserContext,
+    permission: ProjectPermission,
+  ): Promise<boolean> {
+    if (user.role === 'ADMIN') {
+      return canUseProjectPermission(user.role, null, permission);
+    }
+    if (user.role !== 'STAFF') {
+      return canUseProjectPermission(user.role, null, permission);
+    }
+
+    const role = await this.getMemberRole(projectId, user.id);
+    return canUseProjectPermission(user.role, role, permission);
+  },
+
   async canAccessProject(projectId: string, user: UserContext): Promise<boolean> {
     if (user.role === 'ADMIN') return true;
 
     if (user.role === 'STAFF') {
-      const role = await this.getMemberRole(projectId, user.id);
-      return role !== null;
+      return this.hasProjectPermission(projectId, user, 'project:view');
     }
 
     if (user.role === 'CLIENT') {
@@ -63,60 +66,50 @@ export const AuthorizationService = {
     return false;
   },
 
-  /**
-   * Verify if a user is authorized to manage project settings / status / members.
-   */
   async canManageProject(projectId: string, user: UserContext): Promise<boolean> {
-    if (user.role === 'ADMIN') return true;
-    if (user.role !== 'STAFF') return false;
-    const role = await this.getMemberRole(projectId, user.id);
-    return role === 'Project Manager';
+    return this.hasProjectPermission(projectId, user, 'project:manage');
   },
 
-  /**
-   * Verify if a user is authorized to manage members in the project.
-   */
   async canManageMembers(projectId: string, user: UserContext): Promise<boolean> {
-    return this.canManageProject(projectId, user);
+    return this.hasProjectPermission(projectId, user, 'members:manage');
   },
 
-  /**
-   * Verify if a user is authorized to create/edit/assign tasks.
-   */
   async canAssignTasks(projectId: string, user: UserContext): Promise<boolean> {
-    if (user.role === 'ADMIN') return true;
-    if (user.role !== 'STAFF') return false;
-    const role = await this.getMemberRole(projectId, user.id);
-    return role === 'Project Manager' || role === 'Lead Developer';
+    return this.hasProjectPermission(projectId, user, 'tasks:assign');
   },
 
-  /**
-   * Verify if a user is authorized to view billing details/invoices.
-   */
   async canViewBilling(projectId: string, user: UserContext): Promise<boolean> {
-    if (user.role === 'ADMIN') return true;
-    if (user.role !== 'STAFF') return false;
-    const role = await this.getMemberRole(projectId, user.id);
-    return role === 'Project Manager';
+    return this.hasProjectPermission(projectId, user, 'billing:view');
   },
 
-  /**
-   * Verify if a user is authorized to approve timesheets.
-   */
-  async canApproveTimesheets(projectId: string, user: UserContext): Promise<boolean> {
-    if (user.role === 'ADMIN') return true;
-    if (user.role !== 'STAFF') return false;
-    const role = await this.getMemberRole(projectId, user.id);
-    return role === 'Project Manager';
+  async canApproveTimesheets(_projectId: string, user: UserContext): Promise<boolean> {
+    return user.role === 'ADMIN';
   },
 
+  async canManageFiles(projectId: string, user: UserContext): Promise<boolean> {
+    return this.hasProjectPermission(projectId, user, 'files:manage');
+  },
+
+  async canManageMeetings(projectId: string, user: UserContext): Promise<boolean> {
+    return this.hasProjectPermission(projectId, user, 'meetings:manage');
+  },
   /**
    * Central assertions helpers
    */
+  async assertProjectPermission(
+    projectId: string,
+    user: UserContext,
+    permission: ProjectPermission,
+  ): Promise<void> {
+    const allowed = await this.hasProjectPermission(projectId, user, permission);
+    if (!allowed) {
+      throw forbidden('Access denied');
+    }
+  },
+
   async assertProject(projectId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessProject(projectId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -124,7 +117,6 @@ export const AuthorizationService = {
   async assertClient(clientId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessClient(clientId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -132,7 +124,6 @@ export const AuthorizationService = {
   async assertTask(taskId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessTask(taskId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -140,7 +131,6 @@ export const AuthorizationService = {
   async assertInvoice(invoiceId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessInvoice(invoiceId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -148,7 +138,6 @@ export const AuthorizationService = {
   async assertQuotation(quotationId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessQuotation(quotationId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -156,7 +145,6 @@ export const AuthorizationService = {
   async assertPayment(paymentId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessPayment(paymentId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -164,7 +152,6 @@ export const AuthorizationService = {
   async assertExpense(expenseId: string, user: UserContext): Promise<void> {
     const hasAccess = await this.canAccessExpense(expenseId, user);
     if (!hasAccess) {
-      const { forbidden } = require('../utils/errors');
       throw forbidden('Access denied');
     }
   },
@@ -180,27 +167,17 @@ export const AuthorizationService = {
         where: {
           id: clientId,
           deletedAt: null,
-          OR: [
-            { assignedManagerId: user.id },
-            {
-              projects: {
+          projects: {
+            some: {
+              deletedAt: null,
+              projectMembers: {
                 some: {
-                  deletedAt: null,
-                  OR: [
-                    { projectManagerId: user.id },
-                    {
-                      projectMembers: {
-                        some: {
-                          userId: user.id,
-                          projectRole: 'Project Manager',
-                        },
-                      },
-                    },
-                  ],
+                  userId: user.id,
+                  projectRole: 'PROJECT_MANAGER',
                 },
               },
             },
-          ],
+          },
         },
         select: { id: true },
       });

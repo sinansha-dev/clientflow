@@ -107,9 +107,13 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
     );
   }
 
-  const isDeveloper = user?.role === 'STAFF';
-  const isAssigned = task.assignees?.some((a) => a.id === user?.id);
-  const canModifyConfig = user?.role === 'ADMIN' || (isDeveloper && isAssigned);
+  const isAssigned = task.assignees?.some((assignee) => assignee.id === user?.id);
+  const projectRole = task.project?.projectMembers?.find(
+    (member) => member.userId === user?.id,
+  )?.projectRole;
+  const canModifyConfig =
+    user?.role === 'ADMIN' || projectRole === 'PROJECT_MANAGER' || projectRole === 'LEAD_DEVELOPER';
+  const canUpdateProgress = canModifyConfig || Boolean(isAssigned);
 
   // --- Task Detail Mutators ---
   const handleDeleteTask = async () => {
@@ -377,7 +381,7 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
               value={task.status}
               onChange={(e) => updateTaskField({ status: e.target.value })}
               className="h-8 w-full rounded border border-border bg-background px-2"
-              disabled={!canModifyConfig}
+              disabled={!canUpdateProgress}
             >
               <option value="TODO">To Do</option>
               <option value="IN_PROGRESS">In Progress</option>
