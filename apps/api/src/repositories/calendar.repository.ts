@@ -87,7 +87,7 @@ export const calendarRepository = {
     const projectsWhere: Prisma.ProjectWhereInput = {
       deletedAt: null,
       ...(projectId && projectId !== 'ALL' ? { id: projectId } : {}),
-      ...(userId ? { teamMembers: { some: { userId } } } : {}),
+      ...(userId ? { projectMembers: { some: { userId } } } : {}),
       ...(startFilter || endFilter
         ? {
             deadline: {

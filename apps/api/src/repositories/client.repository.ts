@@ -2,17 +2,20 @@ import type { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma';
 
 export const clientRepository = {
-  async list(params: {
-    search?: string;
-    status?: string;
-    industry?: string;
-    country?: string;
-    managerId?: string;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    page?: number;
-    limit?: number;
-  }) {
+  async list(
+    params: {
+      search?: string;
+      status?: string;
+      industry?: string;
+      country?: string;
+      managerId?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      page?: number;
+      limit?: number;
+    },
+    currentUser?: { id: string; email: string; role: any },
+  ) {
     const {
       search,
       status,
@@ -32,7 +35,35 @@ export const clientRepository = {
       ...(status && status !== 'ALL' ? { status } : {}),
       ...(industry && industry !== 'ALL' ? { industry } : {}),
       ...(country && country !== 'ALL' ? { country } : {}),
-      ...(managerId && managerId !== 'ALL' ? { assignedManagerId: managerId } : {}),
+      ...(currentUser?.role === 'STAFF'
+        ? {
+            OR: [
+              { assignedManagerId: currentUser.id },
+              {
+                projects: {
+                  some: {
+                    deletedAt: null,
+                    OR: [
+                      { projectManagerId: currentUser.id },
+                      { projectMembers: { some: { userId: currentUser.id } } },
+                    ],
+                  },
+                },
+              },
+            ],
+          }
+        : {
+            ...(managerId && managerId !== 'ALL' ? { assignedManagerId: managerId } : {}),
+          }),
+      ...(currentUser?.role === 'CLIENT'
+        ? {
+            OR: [
+              { email: currentUser.email },
+              { contacts: { some: { email: currentUser.email } } },
+              { portalAccesses: { some: { userId: currentUser.id, status: 'ACTIVE' } } },
+            ],
+          }
+        : {}),
       ...(search
         ? {
             OR: [
@@ -83,7 +114,48 @@ export const clientRepository = {
     };
   },
 
-  async findById(id: string) {
+  async findById(id: string, currentUser?: { id: string; email: string; role: any }) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessClient(id, currentUser);
+      if (!hasAccess) return null;
+    }
+
+    let invoiceWhere: Prisma.InvoiceWhereInput = { deletedAt: null };
+    let quotationWhere: Prisma.QuotationWhereInput = { deletedAt: null };
+
+    if (currentUser && currentUser.role === 'STAFF') {
+      const clientRecord = await prisma.client.findFirst({
+        where: { id, deletedAt: null },
+        select: { assignedManagerId: true },
+      });
+      const isManager = clientRecord?.assignedManagerId === currentUser.id;
+
+      if (!isManager) {
+        const projectIds = await prisma.projectMember
+          .findMany({
+            where: { userId: currentUser.id },
+            select: { projectId: true },
+          })
+          .then((pts: { projectId: string }[]) =>
+            pts.map((pt: { projectId: string }) => pt.projectId),
+          );
+
+        invoiceWhere = { deletedAt: null, projectId: { in: projectIds } };
+        quotationWhere = { deletedAt: null, projectId: { in: projectIds } };
+      }
+    } else if (currentUser && currentUser.role === 'CLIENT') {
+      const accesses = await prisma.clientPortalAccess
+        .findMany({
+          where: { userId: currentUser.id, status: 'ACTIVE' },
+          select: { clientId: true },
+        })
+        .then((acc) => acc.map((a) => a.clientId));
+
+      invoiceWhere = { deletedAt: null, clientId: { in: accesses } };
+      quotationWhere = { deletedAt: null, clientId: { in: accesses } };
+    }
+
     return prisma.client.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -148,12 +220,12 @@ export const clientRepository = {
           orderBy: { createdAt: 'desc' },
         },
         invoices: {
-          where: { deletedAt: null },
+          where: invoiceWhere,
           include: { project: true, payments: true },
           orderBy: { createdAt: 'desc' },
         },
         quotations: {
-          where: { deletedAt: null },
+          where: quotationWhere,
           include: { project: true, items: true },
           orderBy: { createdAt: 'desc' },
         },

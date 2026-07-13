@@ -24,9 +24,9 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
   const notify = useToastStore((state) => state.notify);
 
   // Additional state to manage team members assignments in wizard UI
-  const [teamMembersInput, setTeamMembersInput] = useState<Array<{ userId: string; role: string }>>(
-    [],
-  );
+  const [projectMembersInput, setTeamMembersInput] = useState<
+    Array<{ userId: string; role: string }>
+  >([]);
 
   const form = useForm<ProjectInput>({
     resolver: zodResolver(createProjectSchema),
@@ -41,7 +41,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
       estimatedHours: 0,
       status: 'PLANNING',
       projectManagerId: '',
-      teamMembers: [],
+      projectMembers: [],
     },
   });
 
@@ -122,12 +122,12 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
       }
 
       // Filter out invalid team members (missing userId)
-      const cleanTeamMembers = teamMembersInput.filter((tm) => tm.userId !== '');
+      const cleanTeamMembers = projectMembersInput.filter((tm) => tm.userId !== '');
 
       // Combine payload
       const payload = {
         ...values,
-        teamMembers: cleanTeamMembers,
+        projectMembers: cleanTeamMembers,
       };
 
       await api.post('/projects', payload);
@@ -323,7 +323,7 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                   </div>
 
                   <div className="grid gap-3">
-                    {teamMembersInput.map((tm, idx) => (
+                    {projectMembersInput.map((tm, idx) => (
                       <div
                         key={idx}
                         className="flex gap-2 items-center bg-muted/20 p-2 rounded-md border border-border/50"
@@ -425,13 +425,13 @@ export function ProjectWizard({ onClose, onSuccess }: ProjectWizardProps) {
                       <span className="font-medium text-foreground/60">Project Manager:</span>{' '}
                       {selectedPM?.firstName} {selectedPM?.lastName}
                     </p>
-                    {teamMembersInput.filter((t) => t.userId).length > 0 && (
+                    {projectMembersInput.filter((t) => t.userId).length > 0 && (
                       <div className="mt-1">
                         <span className="font-medium text-foreground/60 block">
                           Assigned Staff:
                         </span>
                         <ul className="list-disc pl-5 mt-1 grid gap-0.5 text-xs">
-                          {teamMembersInput
+                          {projectMembersInput
                             .filter((t) => t.userId)
                             .map((tm, i) => {
                               const u = staff.find((s) => s.id === tm.userId);

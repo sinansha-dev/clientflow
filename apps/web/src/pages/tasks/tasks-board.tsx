@@ -47,17 +47,17 @@ export function TasksBoard({ projectId: scopedProjectId }: TasksBoardProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createModalDefaultStatus, setCreateModalDefaultStatus] = useState<string>('TODO');
 
-  const isAdmin = user?.role === 'ADMIN';
+  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
 
   const loadFilterOptions = async () => {
     try {
       const [prjRes, usrRes, lblRes] = await Promise.all([
         api.get('/projects?limit=1000'),
-        api.get('/users'),
+        api.get('/users/staff'),
         api.get('/labels'),
       ]);
       setProjects(prjRes.data.data?.items ?? []);
-      setTeam((usrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+      setTeam((usrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
       setLabels(lblRes.data.data ?? []);
     } catch (err) {
       console.error(err);
@@ -147,7 +147,10 @@ export function TasksBoard({ projectId: scopedProjectId }: TasksBoardProps) {
   return (
     <div className="flex flex-col gap-6 h-full flex-1 w-full min-w-0 overflow-hidden">
       {/* Header section */}
-      <BoardHeader onCreateTaskClick={() => handleColumnQuickAdd('TODO')} isAdmin={isAdmin} />
+      <BoardHeader
+        onCreateTaskClick={() => handleColumnQuickAdd('TODO')}
+        canCreate={canCreateTasks}
+      />
 
       {/* Filters (only show if not scoped to project detail workspace) */}
       {!scopedProjectId && (
@@ -186,14 +189,14 @@ export function TasksBoard({ projectId: scopedProjectId }: TasksBoardProps) {
                 statusId={col.id}
                 label={col.label}
                 count={colTasks.length}
-                isAdmin={isAdmin}
+                canCreate={canCreateTasks}
                 onQuickAddClick={() => handleColumnQuickAdd(col.id)}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
               >
                 {colTasks.length === 0 ? (
                   <EmptyColumn
-                    showCreateButton={isAdmin}
+                    showCreateButton={canCreateTasks}
                     onCreateTask={() => handleColumnQuickAdd(col.id)}
                   />
                 ) : (

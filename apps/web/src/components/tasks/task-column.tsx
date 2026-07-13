@@ -5,7 +5,7 @@ interface TaskColumnProps {
   statusId: string;
   label: string;
   count: number;
-  isAdmin?: boolean;
+  canCreate?: boolean;
   onQuickAddClick: () => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent, statusId: string) => void;
@@ -16,7 +16,7 @@ export function TaskColumn({
   statusId,
   label,
   count,
-  isAdmin = false,
+  canCreate = false,
   onQuickAddClick,
   onDragOver,
   onDrop,
@@ -84,7 +84,7 @@ export function TaskColumn({
         statusId={statusId}
         label={label}
         count={count}
-        isAdmin={isAdmin}
+        canCreate={canCreate}
         onQuickAddClick={onQuickAddClick}
       />
 

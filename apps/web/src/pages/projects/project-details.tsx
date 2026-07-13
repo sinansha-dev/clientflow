@@ -755,7 +755,7 @@ export function ProjectDetailsPage() {
                     >
                       <option value="">Select Staff...</option>
                       {staff
-                        .filter((s) => !project.teamMembers?.some((tm) => tm.userId === s.id))
+                        .filter((s) => !project.projectMembers?.some((tm) => tm.userId === s.id))
                         .map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.firstName} {s.lastName}
@@ -783,7 +783,7 @@ export function ProjectDetailsPage() {
               )}
 
               <div className="grid gap-3 sm:grid-cols-2">
-                {project.teamMembers?.map((tm) => (
+                {project.projectMembers?.map((tm) => (
                   <div
                     key={tm.userId}
                     className="flex items-center justify-between border border-border p-3 rounded-lg bg-card"
@@ -1772,7 +1772,7 @@ export function ProjectDetailsPage() {
                         <div key={name}>
                           <div className="flex justify-between mb-1">
                             <span>{name}</span>
-                            <span className="text-primary font-bold">{hours} hrs</span>
+                            <span className="text-primary font-bold">{hours.toFixed(2)} hrs</span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                             <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
@@ -1809,7 +1809,7 @@ export function ProjectDetailsPage() {
                         <div key={title}>
                           <div className="flex justify-between mb-1">
                             <span className="truncate max-w-[260px]">{title}</span>
-                            <span className="text-primary font-bold">{hours} hrs</span>
+                            <span className="text-primary font-bold">{hours.toFixed(2)} hrs</span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                             <div className="h-full bg-primary" style={{ width: `${pct}%` }} />

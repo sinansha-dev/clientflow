@@ -15,15 +15,12 @@ timelogRoutes.use(requireAuth);
 timerRoutes.use(requireAuth);
 
 // --- Time Log Routes ---
-timelogRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+timelogRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   timelogController.list(req, res).catch(next),
 );
 
-timelogRoutes.post(
-  '/',
-  requireRole('ADMIN', 'DEVELOPER'),
-  validate(timeLogSchema),
-  (req, res, next) => timelogController.create(req, res).catch(next),
+timelogRoutes.post('/', requireRole('ADMIN', 'STAFF'), validate(timeLogSchema), (req, res, next) =>
+  timelogController.create(req, res).catch(next),
 );
 
 timelogRoutes.post(
@@ -42,7 +39,7 @@ timelogRoutes.post(
 
 timelogRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(updateTimeLogSchema),
   (req, res, next) => timelogController.update(req, res).catch(next),
@@ -50,7 +47,7 @@ timelogRoutes.patch(
 
 timelogRoutes.delete(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => timelogController.remove(req, res).catch(next),
 );
@@ -58,7 +55,7 @@ timelogRoutes.delete(
 // Workflows
 timelogRoutes.post(
   '/:id/submit',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => timelogController.submit(req, res).catch(next),
 );
@@ -78,18 +75,18 @@ timelogRoutes.post(
 );
 
 // Reports
-timelogRoutes.get('/reports', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+timelogRoutes.get('/reports', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   timelogController.getReports(req, res).catch(next),
 );
 
 // --- Timer (Stopwatch) Routes ---
-timerRoutes.get('/active', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+timerRoutes.get('/active', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   timelogController.activeTimer(req, res).catch(next),
 );
 
 timerRoutes.post(
   '/start',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(
     z.object({
       projectId: uuidSchema,
@@ -100,6 +97,6 @@ timerRoutes.post(
   (req, res, next) => timelogController.startTimer(req, res).catch(next),
 );
 
-timerRoutes.post('/stop', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+timerRoutes.post('/stop', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   timelogController.stopTimer(req, res).catch(next),
 );

@@ -86,7 +86,7 @@ export const searchController = {
       team = await prisma.user.findMany({
         where: {
           deletedAt: null,
-          role: { in: ['ADMIN', 'DEVELOPER'] },
+          role: { in: ['ADMIN', 'STAFF'] },
           OR: [
             { firstName: { contains: q, mode: 'insensitive' } },
             { lastName: { contains: q, mode: 'insensitive' } },

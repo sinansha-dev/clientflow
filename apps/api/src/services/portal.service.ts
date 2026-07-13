@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { Role } from '@prisma/client';
+import { prisma } from '../config/prisma';
 import { portalRepository } from '../repositories/portal.repository';
 import { forbidden, notFound } from '../utils/errors';
 import { env } from '../config/env';
@@ -18,7 +19,7 @@ function toPortalUser(user: Express.Request['user']): PortalUser {
 }
 
 function canManage(user: PortalUser): boolean {
-  return user.role === 'ADMIN' || user.role === 'DEVELOPER';
+  return user.role === 'ADMIN' || user.role === 'STAFF';
 }
 
 function signDownload(fileId: string): { token: string; expiresAt: string } {
@@ -262,12 +263,18 @@ export const portalService = {
   ) {
     const user = toPortalUser(requestUser);
     if (!canManage(user)) throw forbidden('Only agency users can manage folders');
+    const folder = await prisma.portalFolder.findFirst({ where: { id, deletedAt: null } });
+    if (!folder) throw notFound('Folder not found');
+    await this.assertProjectAccess(folder.projectId, user);
     return portalRepository.updateFolder(id, data);
   },
 
   async deleteFolder(id: string, requestUser: Express.Request['user']) {
     const user = toPortalUser(requestUser);
     if (!canManage(user)) throw forbidden('Only agency users can manage folders');
+    const folder = await prisma.portalFolder.findFirst({ where: { id, deletedAt: null } });
+    if (!folder) throw notFound('Folder not found');
+    await this.assertProjectAccess(folder.projectId, user);
     return portalRepository.softDeleteFolder(id);
   },
 
@@ -380,6 +387,9 @@ export const portalService = {
   ) {
     const user = toPortalUser(requestUser);
     if (!canManage(user)) throw forbidden('Only agency users can update revision status');
+    const revision = await prisma.revisionRequest.findFirst({ where: { id } });
+    if (!revision) throw notFound('Revision not found');
+    await this.assertProjectAccess(revision.projectId, user);
     return portalRepository.updateRevision(id, data);
   },
 
@@ -416,6 +426,7 @@ export const portalService = {
     const user = toPortalUser(requestUser);
     const message = await portalRepository.findMessage(id);
     if (!message) throw notFound('Message not found');
+    await this.assertProjectAccess(message.projectId, user);
     if (message.authorId !== user.id && user.role !== 'ADMIN')
       throw forbidden('You cannot edit this message');
     return portalRepository.updateMessage(id, { body, edited: true });
@@ -425,6 +436,7 @@ export const portalService = {
     const user = toPortalUser(requestUser);
     const message = await portalRepository.findMessage(id);
     if (!message) throw notFound('Message not found');
+    await this.assertProjectAccess(message.projectId, user);
     if (message.authorId !== user.id && user.role !== 'ADMIN')
       throw forbidden('You cannot delete this message');
     return portalRepository.softDeleteMessage(id);

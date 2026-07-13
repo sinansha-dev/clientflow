@@ -4,10 +4,10 @@ import { useAuthStore } from '../../stores/auth-store';
 
 interface BoardHeaderProps {
   onCreateTaskClick: () => void;
-  isAdmin?: boolean;
+  canCreate?: boolean;
 }
 
-export function BoardHeader({ onCreateTaskClick, isAdmin = false }: BoardHeaderProps) {
+export function BoardHeader({ onCreateTaskClick, canCreate = false }: BoardHeaderProps) {
   const { user } = useAuthStore();
 
   const getInitials = () => {
@@ -63,7 +63,7 @@ export function BoardHeader({ onCreateTaskClick, isAdmin = false }: BoardHeaderP
         </div>
 
         {/* Primary CTA */}
-        {isAdmin && (
+        {canCreate && (
           <Button
             onClick={onCreateTaskClick}
             className="rounded-xl h-10 px-4 bg-primary hover:bg-primary/95 text-primary-foreground font-semibold text-xs shadow-md shadow-primary/10 flex items-center gap-2 transition-all duration-150"

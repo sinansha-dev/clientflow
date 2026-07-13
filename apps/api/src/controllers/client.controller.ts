@@ -3,6 +3,7 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma';
 import { clientRepository } from '../repositories/client.repository';
 import { activityService } from '../services/activity.service';
+import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
 import fs from 'fs';
@@ -14,24 +15,18 @@ export const clientController = {
     const { search, status, industry, country, managerId, sortBy, sortOrder, page, limit } =
       req.query;
 
-    // Enforce role permission: Developer can only view assigned clients
-    let resolvedManagerId = managerId as string | undefined;
-    if (user.role === 'DEVELOPER') {
-      resolvedManagerId = user.id;
-    }
-
     const params: Parameters<typeof clientRepository.list>[0] = {};
     if (search) params.search = search as string;
     if (status) params.status = status as string;
     if (industry) params.industry = industry as string;
     if (country) params.country = country as string;
-    if (resolvedManagerId) params.managerId = resolvedManagerId;
+    if (managerId) params.managerId = managerId as string;
     if (sortBy) params.sortBy = sortBy as string;
     if (sortOrder) params.sortOrder = sortOrder as 'asc' | 'desc';
     if (page) params.page = parseInt(page as string, 10);
     if (limit) params.limit = parseInt(limit as string, 10);
 
-    const result = await clientRepository.list(params);
+    const result = await clientRepository.list(params, user);
 
     return ok(res, 'Clients retrieved successfully', result);
   },
@@ -40,20 +35,18 @@ export const clientController = {
     const user = req.user!;
     const id = req.params.id!;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
-    }
-
-    // Enforce role permission: Developer can only view assigned clients
-    if (user.role === 'DEVELOPER' && client.assignedManagerId !== user.id) {
-      throw forbidden('You can only view assigned clients');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     return ok(res, 'Client retrieved successfully', client);
   },
 
   async create(req: Request, res: Response) {
+    const user = req.user!;
     const body = req.body;
 
     const nameExists = await clientRepository.checkDuplicateName(body.companyName);
@@ -85,17 +78,20 @@ export const clientController = {
     );
 
     // Fetch the client with its contacts and details
-    const createdClient = await clientRepository.findById(client.id);
+    const createdClient = await clientRepository.findById(client.id, user);
     return ok(res, 'Client created successfully', createdClient, 201);
   },
 
   async createPortalLogin(req: Request, res: Response) {
+    const userContext = req.user!;
     const id = req.params.id!;
     const { email, password, firstName, lastName } = req.body;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, userContext);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -153,24 +149,24 @@ export const clientController = {
       201,
     );
   },
+
   async update(req: Request, res: Response) {
     const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     // Enforce role permission: Developer cannot edit billing information
     const billingFields = ['taxNumber', 'billingAddress', 'shippingAddress', 'currency'];
     const modifyingBilling = billingFields.some((field) => body[field] !== undefined);
 
-    if (user.role === 'DEVELOPER') {
-      if (client.assignedManagerId !== user.id) {
-        throw forbidden('You can only edit assigned clients');
-      }
+    if (user.role === 'STAFF') {
       if (modifyingBilling) {
         throw forbidden('Developers are not permitted to edit billing information');
       }
@@ -212,11 +208,14 @@ export const clientController = {
   },
 
   async archive(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     await clientRepository.archive(id);
@@ -226,11 +225,14 @@ export const clientController = {
   },
 
   async restore(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     await clientRepository.restore(id);
@@ -240,11 +242,14 @@ export const clientController = {
   },
 
   async remove(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     await clientRepository.softDelete(id);
@@ -255,21 +260,27 @@ export const clientController = {
 
   // Contact Controllers
   async getContacts(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Contacts retrieved successfully', client.contacts);
   },
 
   async addContact(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     const contact = await clientRepository.addContact(id, body);
@@ -283,6 +294,7 @@ export const clientController = {
   },
 
   async updateContact(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
 
@@ -290,6 +302,8 @@ export const clientController = {
     if (!contact) {
       throw notFound('Contact not found');
     }
+
+    await AuthorizationService.assertClient(contact.clientId, user);
 
     const updated = await clientRepository.updateContact(id, contact.clientId, body);
     await activityService.log(
@@ -302,12 +316,15 @@ export const clientController = {
   },
 
   async deleteContact(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
     const contact = await prisma.clientContact.findFirst({ where: { id } });
     if (!contact) {
       throw notFound('Contact not found');
     }
+
+    await AuthorizationService.assertClient(contact.clientId, user);
 
     await clientRepository.deleteContact(id);
     await activityService.log(
@@ -321,10 +338,13 @@ export const clientController = {
 
   // Note Controllers
   async getNotes(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Notes retrieved successfully', client.notes);
   },
@@ -334,9 +354,11 @@ export const clientController = {
     const id = req.params.id!;
     const { note } = req.body;
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     const clientNote = await clientRepository.addNote(id, user.id, note);
@@ -359,6 +381,8 @@ export const clientController = {
       throw notFound('Note not found');
     }
 
+    await AuthorizationService.assertClient(clientNote.clientId, user);
+
     if (clientNote.userId !== user.id && user.role !== 'ADMIN') {
       throw forbidden('You can only edit your own notes');
     }
@@ -376,6 +400,8 @@ export const clientController = {
       throw notFound('Note not found');
     }
 
+    await AuthorizationService.assertClient(clientNote.clientId, user);
+
     if (clientNote.userId !== user.id && user.role !== 'ADMIN') {
       throw forbidden('You can only delete your own notes');
     }
@@ -386,15 +412,19 @@ export const clientController = {
 
   // File Controllers
   async getFiles(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Files retrieved successfully', client.files);
   },
 
   async uploadFile(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const file = req.file;
 
@@ -402,9 +432,11 @@ export const clientController = {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const client = await clientRepository.findById(id);
+    const client = await clientRepository.findById(id, user);
     if (!client) {
-      throw notFound('Client not found');
+      const exists = await prisma.client.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Client not found');
+      throw forbidden('Access denied');
     }
 
     // Save upload metadata
@@ -422,12 +454,15 @@ export const clientController = {
   },
 
   async deleteFile(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
     const clientFile = await clientRepository.findFileById(id);
     if (!clientFile) {
       throw notFound('File not found');
     }
+
+    await AuthorizationService.assertClient(clientFile.clientId, user);
 
     // Try deleting physical file
     const filePath = path.join(__dirname, '../../uploads', path.basename(clientFile.url));

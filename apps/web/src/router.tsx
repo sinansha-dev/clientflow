@@ -24,7 +24,7 @@ import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
 import { FinanceWorkspacePage } from './pages/finance/finance-workspace';
 import { ClientPortalPage } from './pages/portal/client-portal';
 
-const staffOnly = ['ADMIN', 'DEVELOPER'] as const;
+const staffOnly = ['ADMIN', 'STAFF'] as const;
 
 export const router = createBrowserRouter([
   {
@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
       {
         path: '/clients',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <ClientsListPage />
           </ProtectedRoute>
         ),
@@ -62,7 +62,7 @@ export const router = createBrowserRouter([
       {
         path: '/clients/:id',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <ClientDetailsPage />
           </ProtectedRoute>
         ),
@@ -127,7 +127,7 @@ export const router = createBrowserRouter([
       {
         path: '/invoices',
         element: (
-          <ProtectedRoute roles={[...staffOnly]}>
+          <ProtectedRoute roles={['ADMIN']}>
             <FinanceWorkspacePage />
           </ProtectedRoute>
         ),

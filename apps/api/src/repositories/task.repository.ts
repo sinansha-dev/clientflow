@@ -3,19 +3,22 @@ import { prisma } from '../config/prisma';
 import { projectRepository } from './project.repository';
 
 export const taskRepository = {
-  async list(params: {
-    projectId?: string;
-    assigneeId?: string;
-    labelId?: string;
-    status?: string;
-    priority?: string;
-    search?: string;
-    overdue?: boolean;
-    completed?: boolean;
-    userId?: string; // Limit to assigned tasks if developer role
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-  }) {
+  async list(
+    params: {
+      projectId?: string;
+      assigneeId?: string;
+      labelId?: string;
+      status?: string;
+      priority?: string;
+      search?: string;
+      overdue?: boolean;
+      completed?: boolean;
+      userId?: string; // Limit to assigned tasks if developer role
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+    },
+    currentUser?: { id: string; email: string; role: any },
+  ) {
     const {
       projectId,
       assigneeId,
@@ -38,6 +41,30 @@ export const taskRepository = {
       ...(userId ? { assignees: { some: { id: userId } } } : {}),
       ...(assigneeId && assigneeId !== 'ALL' ? { assignees: { some: { id: assigneeId } } } : {}),
       ...(labelId && labelId !== 'ALL' ? { labels: { some: { id: labelId } } } : {}),
+      ...(currentUser?.role === 'STAFF'
+        ? {
+            project: {
+              OR: [
+                { projectManagerId: currentUser.id },
+                { projectMembers: { some: { userId: currentUser.id } } },
+              ],
+            },
+          }
+        : {}),
+      ...(currentUser?.role === 'CLIENT'
+        ? {
+            project: {
+              client: {
+                OR: [
+                  { email: currentUser.email },
+                  { contacts: { some: { email: currentUser.email } } },
+                  { portalAccesses: { some: { userId: currentUser.id, status: 'ACTIVE' } } },
+                ],
+              },
+            },
+            status: 'COMPLETED',
+          }
+        : {}),
       ...(completed !== undefined
         ? completed
           ? { status: 'COMPLETED' }
@@ -84,7 +111,12 @@ export const taskRepository = {
     });
   },
 
-  async findById(id: string) {
+  async findById(id: string, currentUser?: { id: string; email: string; role: any }) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessTask(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.task.findFirst({
       where: { id, deletedAt: null },
       include: {

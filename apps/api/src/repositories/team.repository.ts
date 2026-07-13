@@ -65,7 +65,7 @@ export const teamRepository = {
           employmentType: true,
           joinDate: true,
           timezone: true,
-          projectTeams: {
+          assignedProjects: {
             select: {
               projectId: true,
             },
@@ -97,7 +97,7 @@ export const teamRepository = {
       );
       return {
         ...item,
-        projectsCount: item.projectTeams.length,
+        projectsCount: item.assignedProjects.length,
         activeTasksCount: item.assignedTasks.length,
         weeklyHours: Math.round(weeklyHours * 10) / 10,
         timeLogs: undefined, // remove raw array from output
@@ -142,7 +142,7 @@ export const teamRepository = {
             lastName: true,
           },
         },
-        projectTeams: {
+        assignedProjects: {
           include: {
             project: {
               select: {

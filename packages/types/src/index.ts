@@ -1,4 +1,4 @@
-export type Role = 'ADMIN' | 'DEVELOPER' | 'CLIENT';
+export type Role = 'ADMIN' | 'STAFF' | 'CLIENT';
 export type UserStatus = 'ACTIVE' | 'INVITED' | 'SUSPENDED';
 
 export interface AuthUser {
@@ -118,7 +118,7 @@ export interface Project {
   updatedAt: string | Date;
   archivedAt?: string | Date | null;
   deletedAt?: string | Date | null;
-  teamMembers?: ProjectTeam[];
+  projectMembers?: ProjectTeam[];
   milestones?: Milestone[];
   notes?: ProjectNote[];
   files?: ProjectFile[];

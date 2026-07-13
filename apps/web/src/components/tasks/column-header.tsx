@@ -14,7 +14,7 @@ interface ColumnHeaderProps {
   statusId: string;
   label: string;
   count: number;
-  isAdmin?: boolean;
+  canCreate?: boolean;
   onQuickAddClick?: () => void;
 }
 
@@ -22,7 +22,7 @@ export function ColumnHeader({
   statusId,
   label,
   count,
-  isAdmin = false,
+  canCreate = false,
   onQuickAddClick,
 }: ColumnHeaderProps) {
   // Get icon and color specific to status
@@ -96,7 +96,7 @@ export function ColumnHeader({
       </div>
 
       <div className="flex items-center gap-1">
-        {isAdmin && onQuickAddClick && (
+        {canCreate && onQuickAddClick && (
           <button
             onClick={onQuickAddClick}
             type="button"

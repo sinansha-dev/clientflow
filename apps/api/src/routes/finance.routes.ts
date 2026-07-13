@@ -55,7 +55,7 @@ const expenseSchema = z.object({
 
 export const quotationRoutes = Router();
 quotationRoutes.use(requireAuth);
-quotationRoutes.get('/', requireRole('ADMIN', 'DEVELOPER', 'CLIENT'), (req, res, next) =>
+quotationRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
   financeController.listQuotations(req, res).catch(next),
 );
 quotationRoutes.post('/', requireRole('ADMIN'), validate(quotationSchema), (req, res, next) =>
@@ -101,7 +101,7 @@ quotationRoutes.post(
 
 export const invoiceRoutes = Router();
 invoiceRoutes.use(requireAuth);
-invoiceRoutes.get('/', requireRole('ADMIN', 'DEVELOPER', 'CLIENT'), (req, res, next) =>
+invoiceRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
   financeController.listInvoices(req, res).catch(next),
 );
 invoiceRoutes.post('/', requireRole('ADMIN'), validate(invoiceSchema), (req, res, next) =>
@@ -148,14 +148,11 @@ paymentRoutes.patch(
 
 export const expenseRoutes = Router();
 expenseRoutes.use(requireAuth);
-expenseRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+expenseRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   financeController.listExpenses(req, res).catch(next),
 );
-expenseRoutes.post(
-  '/',
-  requireRole('ADMIN', 'DEVELOPER'),
-  validate(expenseSchema),
-  (req, res, next) => financeController.createExpense(req, res).catch(next),
+expenseRoutes.post('/', requireRole('ADMIN', 'STAFF'), validate(expenseSchema), (req, res, next) =>
+  financeController.createExpense(req, res).catch(next),
 );
 expenseRoutes.patch(
   '/:id',
@@ -182,7 +179,7 @@ financeReportRoutes.get('/revenue', (req, res, next) =>
 
 export const billingPlanRoutes = Router();
 billingPlanRoutes.use(requireAuth);
-billingPlanRoutes.get('/:projectId', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+billingPlanRoutes.get('/:projectId', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   financeController.getBillingPlan(req, res).catch(next),
 );
 billingPlanRoutes.post('/:projectId', requireRole('ADMIN'), (req, res, next) =>
@@ -196,7 +193,7 @@ billingPlanRoutes.post(
 
 export const recurringServiceRoutes = Router();
 recurringServiceRoutes.use(requireAuth);
-recurringServiceRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+recurringServiceRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   financeController.listRecurringServices(req, res).catch(next),
 );
 recurringServiceRoutes.post('/', requireRole('ADMIN'), (req, res, next) =>

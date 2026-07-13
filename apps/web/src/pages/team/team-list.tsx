@@ -50,7 +50,7 @@ export function TeamListPage() {
     email: '',
     firstName: '',
     lastName: '',
-    role: 'DEVELOPER',
+    role: 'STAFF',
     jobTitle: '',
     department: '',
     password: '',
@@ -157,7 +157,7 @@ export function TeamListPage() {
         email: '',
         firstName: '',
         lastName: '',
-        role: 'DEVELOPER',
+        role: 'STAFF',
         jobTitle: '',
         department: '',
         password: '',
@@ -250,7 +250,7 @@ export function TeamListPage() {
             >
               <option value="ALL">All Roles</option>
               <option value="ADMIN">Admin</option>
-              <option value="DEVELOPER">Developer</option>
+              <option value="STAFF">Developer</option>
             </select>
           </div>
 
@@ -498,7 +498,7 @@ export function TeamListPage() {
                     className="h-10 rounded border border-border bg-background px-3"
                     required
                   >
-                    <option value="DEVELOPER">Developer</option>
+                    <option value="STAFF">Developer</option>
                     <option value="ADMIN">Admin</option>
                   </select>
                 </div>

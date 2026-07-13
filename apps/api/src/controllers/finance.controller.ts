@@ -1,7 +1,8 @@
 import type { Request, Response } from 'express';
 import { financeRepository } from '../repositories/finance.repository';
+import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
-import { notFound } from '../utils/errors';
+import { forbidden, notFound } from '../utils/errors';
 
 export const financeController = {
   async listQuotations(req: Request, res: Response) {
@@ -18,33 +19,38 @@ export const financeController = {
   },
 
   async updateQuotation(req: Request, res: Response) {
-    const data = await financeRepository.updateQuotation(req.params.id!, req.body);
+    const data = await financeRepository.updateQuotation(req.params.id!, req.body, req.user);
     if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation updated successfully', data);
   },
 
   async deleteQuotation(req: Request, res: Response) {
-    await financeRepository.deleteQuotation(req.params.id!);
+    const data = await financeRepository.deleteQuotation(req.params.id!, req.user);
+    if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation deleted successfully');
   },
 
   async sendQuotation(req: Request, res: Response) {
-    const data = await financeRepository.setQuotationStatus(req.params.id!, 'SENT');
+    const data = await financeRepository.setQuotationStatus(req.params.id!, 'SENT', req.user);
+    if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation marked as sent', data);
   },
 
   async approveQuotation(req: Request, res: Response) {
-    const data = await financeRepository.setQuotationStatus(req.params.id!, 'ACCEPTED');
+    const data = await financeRepository.setQuotationStatus(req.params.id!, 'ACCEPTED', req.user);
+    if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation approved successfully', data);
   },
 
   async convertQuotationToProject(req: Request, res: Response) {
+    await AuthorizationService.assertQuotation(req.params.id!, req.user!);
     const data = await financeRepository.convertQuotationToProject(req.params.id!, req.user!.id);
     if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation converted to project successfully', data, 201);
   },
 
   async convertQuotationToInvoice(req: Request, res: Response) {
+    await AuthorizationService.assertQuotation(req.params.id!, req.user!);
     const data = await financeRepository.convertQuotationToInvoice(req.params.id!, req.user!.id);
     if (!data) throw notFound('Quotation not found');
     return ok(res, 'Quotation converted to invoice', data, 201);
@@ -64,18 +70,20 @@ export const financeController = {
   },
 
   async updateInvoice(req: Request, res: Response) {
-    const data = await financeRepository.updateInvoice(req.params.id!, req.body);
+    const data = await financeRepository.updateInvoice(req.params.id!, req.body, req.user);
     if (!data) throw notFound('Invoice not found');
     return ok(res, 'Invoice updated successfully', data);
   },
 
   async deleteInvoice(req: Request, res: Response) {
-    await financeRepository.deleteInvoice(req.params.id!);
+    const data = await financeRepository.deleteInvoice(req.params.id!, req.user);
+    if (!data) throw notFound('Invoice not found');
     return ok(res, 'Invoice deleted successfully');
   },
 
   async sendInvoice(req: Request, res: Response) {
-    const data = await financeRepository.setInvoiceStatus(req.params.id!, 'SENT');
+    const data = await financeRepository.setInvoiceStatus(req.params.id!, 'SENT', req.user);
+    if (!data) throw notFound('Invoice not found');
     return ok(res, 'Invoice marked as sent', data);
   },
 
@@ -108,6 +116,7 @@ export const financeController = {
   },
 
   async updatePayment(req: Request, res: Response) {
+    await AuthorizationService.assertPayment(req.params.id!, req.user!);
     const data = await financeRepository.updatePayment(req.params.id!, req.body);
     return ok(res, 'Payment updated successfully', data);
   },
@@ -121,17 +130,19 @@ export const financeController = {
   },
 
   async createExpense(req: Request, res: Response) {
-    const data = await financeRepository.createExpense(req.user!.id, req.body);
+    const data = await financeRepository.createExpense(req.user!.id, req.body, req.user);
     return ok(res, 'Expense recorded successfully', data, 201);
   },
 
   async updateExpense(req: Request, res: Response) {
-    const data = await financeRepository.updateExpense(req.params.id!, req.body);
+    const data = await financeRepository.updateExpense(req.params.id!, req.body, req.user);
+    if (!data) throw notFound('Expense not found');
     return ok(res, 'Expense updated successfully', data);
   },
 
   async deleteExpense(req: Request, res: Response) {
-    await financeRepository.deleteExpense(req.params.id!);
+    const data = await financeRepository.deleteExpense(req.params.id!, req.user);
+    if (!data) throw notFound('Expense not found');
     return ok(res, 'Expense deleted successfully');
   },
 
@@ -142,16 +153,19 @@ export const financeController = {
 
   // --- Billing Plans & Stages ---
   async getBillingPlan(req: Request, res: Response) {
+    await AuthorizationService.assertProject(req.params.projectId!, req.user!);
     const data = await financeRepository.getBillingPlan(req.params.projectId!);
     return ok(res, 'Billing plan retrieved successfully', data);
   },
 
   async createOrUpdateBillingPlan(req: Request, res: Response) {
+    await AuthorizationService.assertProject(req.params.projectId!, req.user!);
     const data = await financeRepository.createOrUpdateBillingPlan(req.params.projectId!, req.body);
     return ok(res, 'Billing plan updated successfully', data);
   },
 
   async generateInvoiceForStage(req: Request, res: Response) {
+    await AuthorizationService.assertProject(req.params.projectId!, req.user!);
     const data = await financeRepository.generateInvoiceForStage(
       req.params.projectId!,
       req.params.stageId!,
@@ -167,6 +181,7 @@ export const financeController = {
   },
 
   async createRecurringService(req: Request, res: Response) {
+    await AuthorizationService.assertProject(req.body.projectId, req.user!);
     const data = await financeRepository.createRecurringService(req.body.projectId, req.body);
     return ok(res, 'Recurring service created successfully', data, 201);
   },

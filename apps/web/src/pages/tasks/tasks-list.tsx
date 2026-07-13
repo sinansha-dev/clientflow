@@ -61,12 +61,12 @@ export function TasksListPage({ projectId: scopedProjectId }: { projectId?: stri
     try {
       const [prjRes, usrRes, lblRes] = await Promise.all([
         api.get('/projects?limit=1000'),
-        api.get('/users'),
+        api.get('/users/staff'),
         api.get('/labels'),
       ]);
       const prjs = prjRes.data.data?.items ?? [];
       setProjects(prjs);
-      setTeam((usrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+      setTeam((usrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
       setLabels(lblRes.data.data ?? []);
 
       if (scopedProjectId) {
@@ -146,7 +146,7 @@ export function TasksListPage({ projectId: scopedProjectId }: { projectId?: stri
     }
   };
 
-  const isAdmin = user?.role === 'ADMIN';
+  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
 
   return (
     <div className="grid gap-6">
@@ -167,7 +167,7 @@ export function TasksListPage({ projectId: scopedProjectId }: { projectId?: stri
             <Button type="submit">Search</Button>
           </form>
 
-          {isAdmin && (
+          {canCreateTasks && (
             <Button
               onClick={() => setShowCreateForm(!showCreateForm)}
               className="flex items-center gap-2"

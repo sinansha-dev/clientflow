@@ -72,13 +72,13 @@ async function clientIdsForUser(user: FinanceUser) {
   return accesses.map((access) => access.clientId);
 }
 
-async function projectIdsForDeveloper(user: FinanceUser) {
-  if (user.role !== 'DEVELOPER') return undefined;
-  const projects = await prisma.projectTeam.findMany({
+async function projectIdsForStaff(user: FinanceUser) {
+  if (user.role !== 'STAFF') return undefined;
+  const projects = await prisma.projectMember.findMany({
     where: { userId: user.id },
     select: { projectId: true },
   });
-  return projects.map((project) => project.projectId);
+  return projects.map((project: { projectId: string }) => project.projectId);
 }
 
 async function visibilityWhere(user: FinanceUser, base: Prisma.QuotationWhereInput = {}) {
@@ -86,8 +86,8 @@ async function visibilityWhere(user: FinanceUser, base: Prisma.QuotationWhereInp
     const clientIds = await clientIdsForUser(user);
     return { ...base, clientId: { in: clientIds ?? [] } };
   }
-  if (user.role === 'DEVELOPER') {
-    const projectIds = await projectIdsForDeveloper(user);
+  if (user.role === 'STAFF') {
+    const projectIds = await projectIdsForStaff(user);
     return { ...base, projectId: { in: projectIds ?? [] } };
   }
   return base;
@@ -98,8 +98,8 @@ async function invoiceVisibilityWhere(user: FinanceUser, base: Prisma.InvoiceWhe
     const clientIds = await clientIdsForUser(user);
     return { ...base, clientId: { in: clientIds ?? [] } };
   }
-  if (user.role === 'DEVELOPER') {
-    const projectIds = await projectIdsForDeveloper(user);
+  if (user.role === 'STAFF') {
+    const projectIds = await projectIdsForStaff(user);
     return { ...base, projectId: { in: projectIds ?? [] } };
   }
   return base;
@@ -168,7 +168,12 @@ export const financeRepository = {
     });
   },
 
-  async updateQuotation(id: string, data: any) {
+  async updateQuotation(id: string, data: any, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessQuotation(id, currentUser);
+      if (!hasAccess) return null;
+    }
     const { items, ...rest } = data;
     const existing = await prisma.quotation.findFirst({
       where: { id, deletedAt: null },
@@ -197,11 +202,21 @@ export const financeRepository = {
     });
   },
 
-  async deleteQuotation(id: string) {
+  async deleteQuotation(id: string, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessQuotation(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.quotation.update({ where: { id }, data: { deletedAt: new Date() } });
   },
 
-  async setQuotationStatus(id: string, status: string) {
+  async setQuotationStatus(id: string, status: string, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessQuotation(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.quotation.update({ where: { id }, data: { status }, include: quoteInclude });
   },
 
@@ -285,7 +300,12 @@ export const financeRepository = {
     });
   },
 
-  async updateInvoice(id: string, data: any) {
+  async updateInvoice(id: string, data: any, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessInvoice(id, currentUser);
+      if (!hasAccess) return null;
+    }
     const { items, ...rest } = data;
     const existing = await prisma.invoice.findFirst({ where: { id, deletedAt: null } });
     if (!existing) return null;
@@ -311,15 +331,26 @@ export const financeRepository = {
     });
   },
 
-  async deleteInvoice(id: string) {
+  async deleteInvoice(id: string, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessInvoice(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
   },
 
-  async setInvoiceStatus(id: string, status: string) {
+  async setInvoiceStatus(id: string, status: string, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessInvoice(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.invoice.update({ where: { id }, data: { status }, include: invoiceInclude });
   },
 
   async listPayments(user: FinanceUser, filters: { clientId?: string; invoiceId?: string }) {
+    if (user.role === 'STAFF') return [];
     const clientIds = await clientIdsForUser(user);
     const where: Prisma.PaymentWhereInput = {};
     if (user.role === 'CLIENT') where.clientId = { in: clientIds ?? [] };
@@ -395,9 +426,10 @@ export const financeRepository = {
   },
 
   async listExpenses(user: FinanceUser, filters: { projectId?: string }) {
-    const projectIds = await projectIdsForDeveloper(user);
+    if (user.role === 'CLIENT') return [];
+    const projectIds = await projectIdsForStaff(user);
     const where: Prisma.ExpenseWhereInput = { deletedAt: null };
-    if (user.role === 'DEVELOPER') where.projectId = { in: projectIds ?? [] };
+    if (user.role === 'STAFF') where.projectId = { in: projectIds ?? [] };
     else if (filters.projectId) where.projectId = filters.projectId;
     return prisma.expense.findMany({
       where,
@@ -406,7 +438,15 @@ export const financeRepository = {
     });
   },
 
-  async createExpense(userId: string, data: any) {
+  async createExpense(userId: string, data: any, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessProject(data.projectId, currentUser);
+      if (!hasAccess) {
+        const { forbidden } = require('../utils/errors');
+        throw forbidden('Unauthorized project access');
+      }
+    }
     return prisma.expense.create({
       data: {
         projectId: data.projectId,
@@ -421,7 +461,12 @@ export const financeRepository = {
     });
   },
 
-  async updateExpense(id: string, data: any) {
+  async updateExpense(id: string, data: any, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessExpense(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.expense.update({
       where: { id },
       data: { ...data, expenseDate: data.expenseDate ? new Date(data.expenseDate) : undefined },
@@ -429,7 +474,12 @@ export const financeRepository = {
     });
   },
 
-  async deleteExpense(id: string) {
+  async deleteExpense(id: string, currentUser?: FinanceUser) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessExpense(id, currentUser);
+      if (!hasAccess) return null;
+    }
     return prisma.expense.update({ where: { id }, data: { deletedAt: new Date() } });
   },
 

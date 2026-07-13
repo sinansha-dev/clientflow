@@ -75,24 +75,24 @@ taskRoutes.use(requireAuth);
 labelRoutes.use(requireAuth);
 
 // --- Task routes ---
-taskRoutes.get('/', requireRole('ADMIN', 'DEVELOPER', 'CLIENT'), (req, res, next) =>
+taskRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
   taskController.list(req, res).catch(next),
 );
 
-taskRoutes.post('/', requireRole('ADMIN'), validate(createTaskSchema), (req, res, next) =>
+taskRoutes.post('/', requireRole('ADMIN', 'STAFF'), validate(createTaskSchema), (req, res, next) =>
   taskController.create(req, res).catch(next),
 );
 
 taskRoutes.get(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   (req, res, next) => taskController.getById(req, res).catch(next),
 );
 
 taskRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(updateTaskSchema),
   (req, res, next) => taskController.update(req, res).catch(next),
@@ -105,7 +105,7 @@ taskRoutes.delete('/:id', requireRole('ADMIN'), validate(idParams, 'params'), (r
 // Drag and drop position move
 taskRoutes.patch(
   '/:id/move',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(
     z.object({
@@ -120,7 +120,7 @@ taskRoutes.patch(
 // --- Comments routes ---
 taskRoutes.post(
   '/:id/comments',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   validate(taskCommentSchema),
   (req, res, next) => taskController.addComment(req, res).catch(next),
@@ -130,7 +130,7 @@ const commentIdParams = z.object({ id: uuidSchema });
 
 taskRoutes.patch(
   '/comments/:id',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(commentIdParams, 'params'),
   validate(taskCommentSchema),
   (req, res, next) => taskController.updateComment(req, res).catch(next),
@@ -138,7 +138,7 @@ taskRoutes.patch(
 
 taskRoutes.delete(
   '/comments/:id',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(commentIdParams, 'params'),
   (req, res, next) => taskController.deleteComment(req, res).catch(next),
 );
@@ -146,7 +146,7 @@ taskRoutes.delete(
 // --- Checklists routes ---
 taskRoutes.post(
   '/:id/checklists',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(taskChecklistSchema),
   (req, res, next) => taskController.addChecklistItem(req, res).catch(next),
@@ -156,7 +156,7 @@ const checklistIdParams = z.object({ id: uuidSchema });
 
 taskRoutes.patch(
   '/checklists/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(checklistIdParams, 'params'),
   validate(taskChecklistSchema.partial()),
   (req, res, next) => taskController.updateChecklistItem(req, res).catch(next),
@@ -164,7 +164,7 @@ taskRoutes.patch(
 
 taskRoutes.delete(
   '/checklists/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(checklistIdParams, 'params'),
   (req, res, next) => taskController.deleteChecklistItem(req, res).catch(next),
 );
@@ -172,7 +172,7 @@ taskRoutes.delete(
 // --- Attachments routes ---
 taskRoutes.post(
   '/:id/attachments',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
@@ -189,7 +189,7 @@ const attachmentIdParams = z.object({ id: uuidSchema });
 
 taskRoutes.delete(
   '/attachments/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(attachmentIdParams, 'params'),
   (req, res, next) => taskController.deleteAttachment(req, res).catch(next),
 );

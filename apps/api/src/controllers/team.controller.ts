@@ -37,7 +37,7 @@ export const teamController = {
       data: {
         email,
         password: hashedPassword,
-        role: role || 'DEVELOPER',
+        role: role || 'STAFF',
         firstName,
         lastName,
         employeeId: employeeId || null,

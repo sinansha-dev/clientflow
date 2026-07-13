@@ -22,20 +22,20 @@ export type NavItem = {
 };
 
 export const navItems: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Clients', href: '/clients', icon: UsersRound, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Projects', href: '/projects', icon: FolderKanban, roles: ['ADMIN', 'DEVELOPER'] },
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Clients', href: '/clients', icon: UsersRound, roles: ['ADMIN'] },
+  { label: 'Projects', href: '/projects', icon: FolderKanban, roles: ['ADMIN', 'STAFF'] },
   {
     label: 'Client Portal',
     href: '/portal',
     icon: ShieldCheck,
     roles: ['CLIENT'],
   },
-  { label: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Calendar', href: '/calendar', icon: CalendarDays, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Team', href: '/team', icon: Users, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Finance', href: '/invoices', icon: CreditCard, roles: ['ADMIN', 'DEVELOPER'] },
-  { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'DEVELOPER'] },
+  { label: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Calendar', href: '/calendar', icon: CalendarDays, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Team', href: '/team', icon: Users, roles: ['ADMIN', 'STAFF'] },
+  { label: 'Finance', href: '/invoices', icon: CreditCard, roles: ['ADMIN'] },
+  { label: 'Reports', href: '/reports', icon: BarChart3, roles: ['ADMIN', 'STAFF'] },
   { label: 'Settings', href: '/settings', icon: Settings, roles: ['ADMIN'] },
 ];

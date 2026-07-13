@@ -83,7 +83,7 @@ const upload = multer({
 projectRoutes.use(requireAuth);
 
 // --- Projects Endpoints ---
-projectRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+projectRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   projectController.list(req, res).catch(next),
 );
 
@@ -93,14 +93,14 @@ projectRoutes.post('/', requireRole('ADMIN'), validate(createProjectSchema), (re
 
 projectRoutes.get(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => projectController.getById(req, res).catch(next),
 );
 
 projectRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'), // Developers can update, but inside the controller we restrict modifying billing/owner details
+  requireRole('ADMIN', 'STAFF'), // Developers can update, but inside the controller we restrict modifying billing/owner details
   validate(idParams, 'params'),
   validate(updateProjectSchema),
   (req, res, next) => projectController.update(req, res).catch(next),
@@ -151,14 +151,14 @@ projectRoutes.delete(
 // --- Milestones Endpoints ---
 projectRoutes.get(
   '/:id/milestones',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => projectController.getMilestones(req, res).catch(next),
 );
 
 projectRoutes.post(
   '/:id/milestones',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(milestoneSchema),
   (req, res, next) => projectController.addMilestone(req, res).catch(next),
@@ -168,7 +168,7 @@ const milestoneIdParams = z.object({ id: uuidSchema });
 
 projectRoutes.patch(
   '/milestones/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(milestoneIdParams, 'params'),
   validate(milestoneSchema.partial()),
   (req, res, next) => projectController.updateMilestone(req, res).catch(next),
@@ -176,7 +176,7 @@ projectRoutes.patch(
 
 projectRoutes.delete(
   '/milestones/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(milestoneIdParams, 'params'),
   (req, res, next) => projectController.deleteMilestone(req, res).catch(next),
 );
@@ -184,14 +184,14 @@ projectRoutes.delete(
 // --- Notes Endpoints ---
 projectRoutes.get(
   '/:id/notes',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => projectController.getNotes(req, res).catch(next),
 );
 
 projectRoutes.post(
   '/:id/notes',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(projectNoteSchema),
   (req, res, next) => projectController.addNote(req, res).catch(next),
@@ -201,7 +201,7 @@ const noteIdParams = z.object({ id: uuidSchema });
 
 projectRoutes.patch(
   '/notes/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(noteIdParams, 'params'),
   validate(projectNoteSchema),
   (req, res, next) => projectController.updateNote(req, res).catch(next),
@@ -209,7 +209,7 @@ projectRoutes.patch(
 
 projectRoutes.delete(
   '/notes/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(noteIdParams, 'params'),
   (req, res, next) => projectController.deleteNote(req, res).catch(next),
 );
@@ -217,7 +217,7 @@ projectRoutes.delete(
 // --- Deployments Endpoints ---
 projectRoutes.post(
   '/:id/deployments',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(projectDeploymentSchema),
   (req, res, next) => projectController.addDeployment(req, res).catch(next),
@@ -227,7 +227,7 @@ const deploymentIdParams = z.object({ id: uuidSchema });
 
 projectRoutes.delete(
   '/deployments/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(deploymentIdParams, 'params'),
   (req, res, next) => projectController.deleteDeployment(req, res).catch(next),
 );
@@ -236,7 +236,7 @@ projectRoutes.delete(
 // GET list files for a project
 projectRoutes.get(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   (req, res, next) => portalController.files(req, res).catch(next),
 );
@@ -244,7 +244,7 @@ projectRoutes.get(
 // POST handles multipart form file upload
 projectRoutes.post(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {

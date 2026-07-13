@@ -56,10 +56,10 @@ export function ProjectsListPage() {
       try {
         const [cliRes, mgrRes] = await Promise.all([
           api.get('/clients?limit=1000'),
-          api.get('/users'),
+          api.get('/users/staff'),
         ]);
         setClients(cliRes.data.data?.items ?? []);
-        setManagers((mgrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+        setManagers((mgrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
       } catch (err) {
         console.error('Failed to load filter options:', err);
       }

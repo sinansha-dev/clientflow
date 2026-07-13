@@ -78,7 +78,7 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
         if (t.projectId) {
           const prjRes = await api.get(`/projects/${t.projectId}`);
           const prj = prjRes.data.data;
-          setProjectTeam(prj?.teamMembers?.map((tm: any) => tm.user) ?? []);
+          setProjectTeam(prj?.projectMembers?.map((tm: any) => tm.user) ?? []);
         }
       } catch (err) {
         console.error('Failed to load project details or team members:', err);
@@ -107,7 +107,7 @@ export function TaskDetailsDrawer({ taskId, onClose, onUpdate }: TaskDetailsDraw
     );
   }
 
-  const isDeveloper = user?.role === 'DEVELOPER';
+  const isDeveloper = user?.role === 'STAFF';
   const isAssigned = task.assignees?.some((a) => a.id === user?.id);
   const canModifyConfig = user?.role === 'ADMIN' || (isDeveloper && isAssigned);
 

@@ -257,8 +257,8 @@ export function DashboardPage() {
     if (p.projectManagerId && p.projectManagerId !== user?.id) {
       collaboratorIds.add(p.projectManagerId);
     }
-    if (p.teamMembers) {
-      p.teamMembers.forEach((member: ProjectTeam) => {
+    if (p.projectMembers) {
+      p.projectMembers.forEach((member: ProjectTeam) => {
         if (member?.userId && member.userId !== user?.id) {
           collaboratorIds.add(member.userId);
         }
@@ -303,7 +303,7 @@ export function DashboardPage() {
   };
 
   const filteredTasks = getFilteredTasks();
-  const canCreateTasks = user?.role === 'ADMIN';
+  const canCreateTasks = user?.role === 'ADMIN' || user?.role === 'STAFF';
   const padding = dashboardDensity === 'compact' ? 'p-4' : 'p-6';
 
   const toggleTaskCompletion = async (task: Task) => {
@@ -535,47 +535,49 @@ export function DashboardPage() {
             </button>
           </div>
           <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 text-xs font-medium">
-            {widgets.map((widget, index) => (
-              <div
-                key={widget.id}
-                className="flex items-center justify-between p-2.5 rounded-xl border border-border bg-background/50 hover:bg-background transition"
-              >
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => toggleWidgetVisibility(widget.id)}
-                    className="p-1 hover:bg-muted rounded text-foreground/75"
-                    title={widget.visible ? 'Hide widget' : 'Show widget'}
-                  >
-                    {widget.visible ? (
-                      <Eye className="h-4 w-4" />
-                    ) : (
-                      <EyeOff className="h-4 w-4 text-foreground/35" />
-                    )}
-                  </button>
-                  <span className={widget.visible ? 'text-foreground' : 'text-foreground/40'}>
-                    {widget.title}
-                  </span>
+            {widgets
+              .filter((w) => !(w.id === 'revenue' && user?.role === 'STAFF'))
+              .map((widget, index) => (
+                <div
+                  key={widget.id}
+                  className="flex items-center justify-between p-2.5 rounded-xl border border-border bg-background/50 hover:bg-background transition"
+                >
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => toggleWidgetVisibility(widget.id)}
+                      className="p-1 hover:bg-muted rounded text-foreground/75"
+                      title={widget.visible ? 'Hide widget' : 'Show widget'}
+                    >
+                      {widget.visible ? (
+                        <Eye className="h-4 w-4" />
+                      ) : (
+                        <EyeOff className="h-4 w-4 text-foreground/35" />
+                      )}
+                    </button>
+                    <span className={widget.visible ? 'text-foreground' : 'text-foreground/40'}>
+                      {widget.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => moveWidget(index, 'up')}
+                      disabled={index === 0}
+                      className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
+                      title="Move Up"
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => moveWidget(index, 'down')}
+                      disabled={index === widgets.length - 1}
+                      className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
+                      title="Move Down"
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => moveWidget(index, 'up')}
-                    disabled={index === 0}
-                    className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
-                    title="Move Up"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => moveWidget(index, 'down')}
-                    disabled={index === widgets.length - 1}
-                    className="p-1 hover:bg-muted rounded text-foreground/50 disabled:opacity-20"
-                    title="Move Down"
-                  >
-                    <ChevronDown className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </div>
       )}
@@ -584,6 +586,7 @@ export function DashboardPage() {
       <div className="space-y-6">
         {widgets
           .filter((w) => w.visible)
+          .filter((w) => !(w.id === 'revenue' && user?.role === 'STAFF'))
           .map((widget) => {
             const collapseToggle = (
               <button
@@ -688,41 +691,46 @@ export function DashboardPage() {
                       </div>
 
                       {/* Revenue Generated */}
-                      <div className="bg-card border border-border hover:border-accent/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
-                        <div className="flex justify-between items-start">
-                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
-                            Revenue Collected
-                          </span>
-                          <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center border border-purple-500/10 group-hover:scale-105 transition-transform">
-                            <DollarSign className="h-4 w-4" />
+                      {user?.role === 'ADMIN' && (
+                        <div className="bg-card border border-border hover:border-accent/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                              Revenue Collected
+                            </span>
+                            <div className="h-8 w-8 rounded-xl bg-purple-500/10 text-purple-500 flex items-center justify-center border border-purple-500/10 group-hover:scale-105 transition-transform">
+                              <DollarSign className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="flex items-baseline gap-1 mt-2">
+                            <span className="text-2xl font-bold text-foreground">
+                              $
+                              {totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-baseline gap-1 mt-2">
-                          <span className="text-2xl font-bold text-foreground">
-                            ${totalRevenue.toLocaleString(undefined, { minimumFractionDigits: 0 })}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Outstanding payments */}
-                      <div className="bg-card border border-border hover:border-amber-500/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
-                        <div className="flex justify-between items-start">
-                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
-                            Outstanding Invoices
-                          </span>
-                          <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/10 group-hover:scale-105 transition-transform">
-                            <Clock className="h-4 w-4" />
+                      {user?.role === 'ADMIN' && (
+                        <div className="bg-card border border-border hover:border-amber-500/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">
+                          <div className="flex justify-between items-start">
+                            <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-wider">
+                              Outstanding Invoices
+                            </span>
+                            <div className="h-8 w-8 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center border border-amber-500/10 group-hover:scale-105 transition-transform">
+                              <Clock className="h-4 w-4" />
+                            </div>
+                          </div>
+                          <div className="flex items-baseline gap-2 mt-2">
+                            <span className="text-2xl font-bold text-foreground">
+                              $
+                              {totalOutstanding.toLocaleString(undefined, {
+                                minimumFractionDigits: 0,
+                              })}
+                            </span>
                           </div>
                         </div>
-                        <div className="flex items-baseline gap-2 mt-2">
-                          <span className="text-2xl font-bold text-foreground">
-                            $
-                            {totalOutstanding.toLocaleString(undefined, {
-                              minimumFractionDigits: 0,
-                            })}
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Pending Approvals */}
                       <div className="bg-card border border-border hover:border-primary/20 rounded-2xl p-4 shadow-sm hover:shadow-md transition duration-150 flex flex-col justify-between h-28 group">

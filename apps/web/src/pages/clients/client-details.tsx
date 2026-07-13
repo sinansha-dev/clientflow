@@ -46,6 +46,16 @@ export function ClientDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
+  const isAdmin = user?.role === 'ADMIN';
+  const isManager = client ? client.assignedManagerId === user?.id : false;
+  const canSeeBilling = isAdmin || isManager;
+
+  useEffect(() => {
+    if (activeTab === 'invoices' && !canSeeBilling) {
+      setActiveTab('overview');
+    }
+  }, [activeTab, canSeeBilling]);
+
   // Edit Client Modal/Inline State
   const [isEditingClient, setIsEditingClient] = useState(false);
   const [editClientForm, setEditClientForm] = useState<Partial<Client>>({});
@@ -130,7 +140,6 @@ export function ClientDetailsPage() {
     return <div className="py-12 text-center text-foreground/50">Client not found.</div>;
   }
 
-  const isAdmin = user?.role === 'ADMIN';
   const clientProjects = client.projects ?? [];
   const activeProjectCount = clientProjects.filter(
     (project) => !['COMPLETED', 'CANCELLED'].includes(project.status),
@@ -441,29 +450,31 @@ export function ClientDetailsPage() {
       <div className="flex border-b border-border overflow-x-auto text-sm font-semibold">
         {(
           [
-            { id: 'overview', label: 'Overview', icon: Building },
-            { id: 'contacts', label: 'Contacts', icon: Users },
-            { id: 'projects', label: 'Projects', icon: FolderKanban },
-            { id: 'invoices', label: 'Billing', icon: FileText },
-            { id: 'files', label: 'Files', icon: Upload },
-            { id: 'notes', label: 'Notes', icon: MessageSquare },
-            { id: 'activity', label: 'Activity', icon: Clock },
-            { id: 'timelogs', label: 'Time Logs', icon: Clock },
+            { id: 'overview', label: 'Overview', icon: Building, visible: true },
+            { id: 'contacts', label: 'Contacts', icon: Users, visible: true },
+            { id: 'projects', label: 'Projects', icon: FolderKanban, visible: true },
+            { id: 'invoices', label: 'Billing', icon: FileText, visible: canSeeBilling },
+            { id: 'files', label: 'Files', icon: Upload, visible: true },
+            { id: 'notes', label: 'Notes', icon: MessageSquare, visible: true },
+            { id: 'activity', label: 'Activity', icon: Clock, visible: true },
+            { id: 'timelogs', label: 'Time Logs', icon: Clock, visible: true },
           ] as const
-        ).map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-2 border-b-2 px-5 py-3 transition whitespace-nowrap ${
-              activeTab === tab.id
-                ? 'border-primary text-primary'
-                : 'border-transparent text-foreground/60 hover:text-foreground hover:border-border'
-            }`}
-          >
-            <tab.icon className="h-4 w-4" />
-            {tab.label}
-          </button>
-        ))}
+        )
+          .filter((tab) => tab.visible)
+          .map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 border-b-2 px-5 py-3 transition whitespace-nowrap ${
+                activeTab === tab.id
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-foreground/60 hover:text-foreground hover:border-border'
+              }`}
+            >
+              <tab.icon className="h-4 w-4" />
+              {tab.label}
+            </button>
+          ))}
       </div>
 
       {/* Detail Layout */}
@@ -609,41 +620,43 @@ export function ClientDetailsPage() {
         {activeTab === 'overview' && (
           <div className="grid gap-6 md:grid-cols-3">
             {/* Stats Block */}
-            <Card className="flex flex-col gap-4 justify-between bg-primary/5 border border-primary/10">
-              <div>
-                <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">
-                  Financial Stats
-                </span>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <DollarSign className="h-5 w-5" />
+            {canSeeBilling && (
+              <Card className="flex flex-col gap-4 justify-between bg-primary/5 border border-primary/10">
+                <div>
+                  <span className="text-xs font-bold uppercase tracking-wider text-foreground/50">
+                    Financial Stats
+                  </span>
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <DollarSign className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="block text-2xl font-bold text-foreground">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: client.currency || 'USD',
+                        }).format(revenueGenerated)}
+                      </span>
+                      <span className="text-xs text-foreground/50">Revenue Generated</span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="block text-2xl font-bold text-foreground">
-                      {new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: client.currency || 'USD',
-                      }).format(revenueGenerated)}
-                    </span>
-                    <span className="text-xs text-foreground/50">Revenue Generated</span>
+                  <div className="mt-4 flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/10 text-orange-600">
+                      <DollarSign className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <span className="block text-2xl font-bold text-foreground">
+                        {new Intl.NumberFormat('en-US', {
+                          style: 'currency',
+                          currency: client.currency || 'USD',
+                        }).format(outstandingBalance)}
+                      </span>
+                      <span className="text-xs text-foreground/50">Outstanding Balance</span>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-orange-500/10 text-orange-600">
-                    <DollarSign className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <span className="block text-2xl font-bold text-foreground">
-                      {new Intl.NumberFormat('en-US', {
-                        style: 'currency',
-                        currency: client.currency || 'USD',
-                      }).format(outstandingBalance)}
-                    </span>
-                    <span className="text-xs text-foreground/50">Outstanding Balance</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
+              </Card>
+            )}
 
             <Card className="flex flex-col gap-4 justify-between">
               <div>
@@ -1483,7 +1496,7 @@ export function ClientDetailsPage() {
                         <div key={name}>
                           <div className="flex justify-between mb-1">
                             <span>{name}</span>
-                            <span className="text-primary font-bold">{hours} hrs</span>
+                            <span className="text-primary font-bold">{hours.toFixed(2)} hrs</span>
                           </div>
                           <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                             <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
@@ -1521,7 +1534,7 @@ export function ClientDetailsPage() {
                       <div key={p.id}>
                         <div className="flex justify-between mb-1">
                           <span>{p.projectName}</span>
-                          <span className="text-primary font-bold">{hours} hrs</span>
+                          <span className="text-primary font-bold">{hours.toFixed(2)} hrs</span>
                         </div>
                         <div className="h-2 w-full rounded-full bg-border overflow-hidden">
                           <div className="h-full bg-primary" style={{ width: `${pct}%` }} />

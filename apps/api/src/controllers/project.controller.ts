@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { projectRepository } from '../repositories/project.repository';
 import { projectActivityService } from '../services/project-activity.service';
+import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
 import fs from 'fs';
@@ -41,12 +42,7 @@ export const projectController = {
       params.limit = parseInt(limit as string, 10);
     }
 
-    // Developer can only view assigned projects
-    if (user.role === 'DEVELOPER') {
-      params.userId = user.id; // Repository will filter by this userId in team members
-    }
-
-    const result = await projectRepository.list(params);
+    const result = await projectRepository.list(params, user);
     return ok(res, 'Projects retrieved successfully', result);
   },
 
@@ -54,17 +50,11 @@ export const projectController = {
     const user = req.user!;
     const id = req.params.id!;
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
-    }
-
-    // Developer can only view assigned projects
-    if (user.role === 'DEVELOPER') {
-      const isMember = project.teamMembers?.some((tm) => tm.userId === user.id);
-      if (!isMember) {
-        throw forbidden('You are not assigned to this project');
-      }
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
     return ok(res, 'Project retrieved successfully', project);
@@ -72,7 +62,7 @@ export const projectController = {
 
   async create(req: Request, res: Response) {
     const user = req.user!;
-    const { teamMembers, ...body } = req.body;
+    const { projectMembers, ...body } = req.body;
 
     // Check if client exists
     const clientExists = await prisma.client.findFirst({
@@ -82,13 +72,13 @@ export const projectController = {
       return res.status(400).json({ success: false, message: 'Selected client does not exist' });
     }
 
-    // Map creator, convert date strings to Date objects, and pass teamMembers as teamMembersInput
+    // Map creator, convert date strings to Date objects, and pass projectMembers as projectMembersInput
     const projectData = {
       ...body,
       createdBy: user.id,
       startDate: body.startDate ? new Date(body.startDate) : undefined,
       deadline: body.deadline ? new Date(body.deadline) : undefined,
-      teamMembersInput: teamMembers, // repository handles nested team member creation separately
+      projectMembersInput: projectMembers, // repository handles nested team member creation separately
     };
 
     const project = await projectRepository.create(projectData);
@@ -98,7 +88,7 @@ export const projectController = {
       `Project "${project.projectName}" was created under client ${clientExists.companyName}`,
     );
 
-    const createdProject = await projectRepository.findById(project.id);
+    const createdProject = await projectRepository.findById(project.id, user);
     return ok(res, 'Project created successfully', createdProject, 201);
   },
 
@@ -107,18 +97,15 @@ export const projectController = {
     const id = req.params.id!;
     const body = req.body;
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
-    // Developer restrictions: Cannot edit budget, owner (manager), client, or priority if not on team
-    if (user.role === 'DEVELOPER') {
-      const isMember = project.teamMembers?.some((tm) => tm.userId === user.id);
-      if (!isMember) {
-        throw forbidden('You cannot update a project you are not assigned to');
-      }
-
+    // Developer restrictions: Cannot edit budget, owner (manager), client, or priority
+    if (user.role === 'STAFF') {
       const restrictedFields = ['budget', 'projectManagerId', 'clientId', 'projectCode'];
       const isModifyingRestricted = restrictedFields.some((field) => body[field] !== undefined);
       if (isModifyingRestricted) {
@@ -131,7 +118,7 @@ export const projectController = {
     const relationFields = [
       'client',
       'projectManager',
-      'teamMembers',
+      'projectMembers',
       'milestones',
       'notes',
       'files',
@@ -219,7 +206,12 @@ export const projectController = {
       throw notFound('Project not found');
     }
 
-    const member = await projectRepository.addTeamMember(id, userId, role);
+    const canManage = await AuthorizationService.canManageMembers(id, req.user!);
+    if (!canManage) {
+      throw forbidden('Access denied');
+    }
+
+    const member = await projectRepository.addProjectMember(id, userId, role);
     await projectActivityService.log(
       id,
       'MEMBER_ADDED',
@@ -234,12 +226,17 @@ export const projectController = {
     const userId = req.params.userId as string;
     const { role } = req.body;
 
-    const exists = await prisma.projectTeam.findFirst({ where: { projectId: id, userId } });
+    const exists = await prisma.projectMember.findFirst({ where: { projectId: id, userId } });
     if (!exists) {
       throw notFound('Team member not assigned to this project');
     }
 
-    const updated = await projectRepository.updateTeamMemberRole(id, userId, role);
+    const canManage = await AuthorizationService.canManageMembers(id, req.user!);
+    if (!canManage) {
+      throw forbidden('Access denied');
+    }
+
+    const updated = await projectRepository.updateProjectMemberRole(id, userId, role);
     await projectActivityService.log(
       id,
       'MEMBER_UPDATED',
@@ -253,12 +250,17 @@ export const projectController = {
     const id = req.params.id as string;
     const userId = req.params.userId as string;
 
-    const exists = await prisma.projectTeam.findFirst({ where: { projectId: id, userId } });
+    const exists = await prisma.projectMember.findFirst({ where: { projectId: id, userId } });
     if (!exists) {
       throw notFound('Team member not assigned to this project');
     }
 
-    await projectRepository.removeTeamMember(id, userId);
+    const canManage = await AuthorizationService.canManageMembers(id, req.user!);
+    if (!canManage) {
+      throw forbidden('Access denied');
+    }
+
+    await projectRepository.removeProjectMember(id, userId);
     await projectActivityService.log(
       id,
       'MEMBER_REMOVED',
@@ -270,21 +272,27 @@ export const projectController = {
 
   // Milestones Controllers
   async getMilestones(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Milestones loaded successfully', project.milestones);
   },
 
   async addMilestone(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
     const milestone = await projectRepository.addMilestone(id, body);
@@ -298,13 +306,16 @@ export const projectController = {
   },
 
   async updateMilestone(req: Request, res: Response) {
-    const id = req.params.id!; // milestone ID
+    const user = req.user!;
+    const id = req.params.id!;
     const body = req.body;
 
     const milestone = await prisma.milestone.findFirst({ where: { id } });
     if (!milestone) {
       throw notFound('Milestone not found');
     }
+
+    await AuthorizationService.assertProject(milestone.projectId, user);
 
     const updated = await projectRepository.updateMilestone(id, milestone.projectId, body);
     if (body.status && body.status !== milestone.status) {
@@ -319,12 +330,15 @@ export const projectController = {
   },
 
   async deleteMilestone(req: Request, res: Response) {
-    const id = req.params.id!; // milestone ID
+    const user = req.user!;
+    const id = req.params.id!;
 
     const milestone = await prisma.milestone.findFirst({ where: { id } });
     if (!milestone) {
       throw notFound('Milestone not found');
     }
+
+    await AuthorizationService.assertProject(milestone.projectId, user);
 
     await projectRepository.deleteMilestone(id, milestone.projectId);
     await projectActivityService.log(
@@ -338,10 +352,13 @@ export const projectController = {
 
   // Notes Controllers
   async getNotes(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Project notes loaded successfully', project.notes);
   },
@@ -351,9 +368,11 @@ export const projectController = {
     const id = req.params.id!;
     const { note } = req.body;
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
     const projectNote = await projectRepository.addNote(id, user.id, note);
@@ -367,6 +386,7 @@ export const projectController = {
   },
 
   async updateNote(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
     const { note } = req.body;
 
@@ -375,11 +395,14 @@ export const projectController = {
       throw notFound('Note not found');
     }
 
+    await AuthorizationService.assertProject(projectNote.projectId, user);
+
     const updated = await projectRepository.updateNote(id, note);
     return ok(res, 'Note updated successfully', updated);
   },
 
   async deleteNote(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
 
     const projectNote = await projectRepository.findNoteById(id);
@@ -387,18 +410,23 @@ export const projectController = {
       throw notFound('Note not found');
     }
 
+    await AuthorizationService.assertProject(projectNote.projectId, user);
+
     await projectRepository.deleteNote(id);
     return ok(res, 'Note deleted successfully');
   },
 
   // Deployments Controllers
   async addDeployment(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const body = req.body;
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
     const deployment = await projectRepository.addDeployment(id, body);
@@ -412,6 +440,7 @@ export const projectController = {
   },
 
   async deleteDeployment(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
     const deployment = await prisma.projectDeployment.findFirst({ where: { id } });
@@ -419,21 +448,27 @@ export const projectController = {
       throw notFound('Deployment not found');
     }
 
+    await AuthorizationService.assertProject(deployment.projectId, user);
+
     await projectRepository.deleteDeployment(id);
     return ok(res, 'Deployment deleted successfully');
   },
 
   // File Upload Controllers
   async getFiles(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
     return ok(res, 'Files retrieved successfully', project.files);
   },
 
   async uploadFile(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
     const file = req.file;
     const { folder = 'DOCUMENTS' } = req.body;
@@ -442,9 +477,11 @@ export const projectController = {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const project = await projectRepository.findById(id);
+    const project = await projectRepository.findById(id, user);
     if (!project) {
-      throw notFound('Project not found');
+      const exists = await prisma.project.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Project not found');
+      throw forbidden('Access denied');
     }
 
     const fileUrl = `/uploads/${file.filename}`;
@@ -466,12 +503,15 @@ export const projectController = {
   },
 
   async deleteFile(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
 
     const projectFile = await projectRepository.findFileById(id);
     if (!projectFile) {
       throw notFound('File not found');
     }
+
+    await AuthorizationService.assertProject(projectFile.projectId, user);
 
     // Delete physical file
     const filePath = path.join(__dirname, '../../uploads', path.basename(projectFile.url));

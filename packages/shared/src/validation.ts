@@ -49,7 +49,7 @@ export const changePasswordSchema = z.object({
 export const createUserSchema = profileSchema.extend({
   email: emailSchema,
   password: passwordSchema,
-  role: z.enum(['ADMIN', 'DEVELOPER', 'CLIENT']),
+  role: z.enum(['ADMIN', 'STAFF', 'CLIENT']),
   status: z.enum(['ACTIVE', 'INVITED', 'SUSPENDED']).default('ACTIVE'),
 });
 
@@ -97,15 +97,7 @@ export const clientNoteSchema = z.object({
 
 export const projectTeamMemberSchema = z.object({
   userId: uuidSchema,
-  role: z.enum([
-    'Project Manager',
-    'Frontend Developer',
-    'Backend Developer',
-    'Full Stack Developer',
-    'UI/UX Designer',
-    'QA Tester',
-    'DevOps',
-  ]),
+  role: z.enum(['Project Manager', 'Lead Developer', 'Developer', 'Designer', 'QA', 'Viewer']),
 });
 
 export const createProjectBaseSchema = z.object({
@@ -133,7 +125,7 @@ export const createProjectBaseSchema = z.object({
     ])
     .default('PLANNING'),
   projectManagerId: requiredUuidSchema('Project manager'),
-  teamMembers: z.array(projectTeamMemberSchema).optional().default([]),
+  projectMembers: z.array(projectTeamMemberSchema).optional().default([]),
 });
 
 export const createProjectSchema = createProjectBaseSchema.refine(

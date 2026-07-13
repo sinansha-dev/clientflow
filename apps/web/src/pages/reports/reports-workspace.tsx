@@ -41,10 +41,10 @@ export function ReportsWorkspacePage() {
     try {
       const [prjRes, usrRes] = await Promise.all([
         api.get('/projects?limit=1000'),
-        api.get('/users'),
+        api.get('/users/staff'),
       ]);
       setProjects(prjRes.data.data?.items ?? []);
-      setTeam((usrRes.data.data ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
+      setTeam((usrRes.data.data?.users ?? []).filter((u: AuthUser) => u.role !== 'CLIENT'));
     } catch (err) {
       console.error(err);
     }

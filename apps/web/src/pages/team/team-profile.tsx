@@ -39,7 +39,7 @@ interface TeamMemberDetail {
   availabilityStatus: string;
   timezone: string;
   manager?: { id: string; firstName: string; lastName: string } | null;
-  projectTeams: Array<{ role: string; project: Project }>;
+  assignedProjects: Array<{ role: string; project: Project }>;
   assignedTasks: Task[];
   timeLogs: TimeLog[];
   meetingsAttending: Array<{ meeting: Meeting; attendanceStatus: string }>;
@@ -405,7 +405,7 @@ export function TeamProfilePage() {
                     <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
                       <span className="text-foreground/50 block font-bold">Current Projects</span>
                       <span className="text-2xl font-bold block mt-1">
-                        {member.projectTeams?.length}
+                        {member.assignedProjects?.length}
                       </span>
                     </div>
                     <div className="bg-muted/15 p-3.5 rounded-lg border border-border/30">
@@ -537,12 +537,12 @@ export function TeamProfilePage() {
         {/* PROJECTS TAB */}
         {currentTab === 'projects' && (
           <div className="grid gap-3 sm:grid-cols-2">
-            {member.projectTeams?.length === 0 ? (
+            {member.assignedProjects?.length === 0 ? (
               <Card className="col-span-full py-12 text-center text-foreground/40 italic">
                 No active projects assigned.
               </Card>
             ) : (
-              member.projectTeams?.map((t) => (
+              member.assignedProjects?.map((t) => (
                 <Card key={t.project.id} className="flex justify-between items-center">
                   <div>
                     <Link

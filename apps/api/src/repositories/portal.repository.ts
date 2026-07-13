@@ -32,10 +32,10 @@ export const portalRepository = {
       return { deletedAt: null };
     }
 
-    if (role === 'DEVELOPER') {
+    if (role === 'STAFF') {
       return {
         deletedAt: null,
-        OR: [{ projectManagerId: userId }, { teamMembers: { some: { userId } } }],
+        OR: [{ projectManagerId: userId }, { projectMembers: { some: { userId } } }],
       };
     }
 
@@ -72,7 +72,7 @@ export const portalRepository = {
       where: { id: projectId, deletedAt: null },
       include: {
         ...projectListInclude,
-        teamMembers: { include: { user: { select: userSelect } } },
+        projectMembers: { include: { user: { select: userSelect } } },
         portalFolders: { where: { deletedAt: null }, orderBy: { folderName: 'asc' } },
         deliverableApprovals: { orderBy: { createdAt: 'desc' }, include: { deliverable: true } },
         revisionRequests: {

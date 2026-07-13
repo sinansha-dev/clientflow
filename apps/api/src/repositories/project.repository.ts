@@ -34,19 +34,22 @@ export const projectRepository = {
     return 'HEALTHY';
   },
 
-  async list(params: {
-    search?: string;
-    status?: string;
-    priority?: string;
-    health?: string;
-    clientId?: string;
-    managerId?: string;
-    userId?: string;
-    sortBy?: string;
-    sortOrder?: 'asc' | 'desc';
-    page?: number;
-    limit?: number;
-  }) {
+  async list(
+    params: {
+      search?: string;
+      status?: string;
+      priority?: string;
+      health?: string;
+      clientId?: string;
+      managerId?: string;
+      userId?: string;
+      sortBy?: string;
+      sortOrder?: 'asc' | 'desc';
+      page?: number;
+      limit?: number;
+    },
+    currentUser?: { id: string; email: string; role: any },
+  ) {
     const {
       search,
       status,
@@ -69,7 +72,26 @@ export const projectRepository = {
       ...(priority && priority !== 'ALL' ? { priority } : {}),
       ...(clientId && clientId !== 'ALL' ? { clientId } : {}),
       ...(managerId && managerId !== 'ALL' ? { projectManagerId: managerId } : {}),
-      ...(userId ? { teamMembers: { some: { userId } } } : {}),
+      ...(userId ? { projectMembers: { some: { userId } } } : {}),
+      ...(currentUser?.role === 'STAFF'
+        ? {
+            OR: [
+              { projectManagerId: currentUser.id },
+              { projectMembers: { some: { userId: currentUser.id } } },
+            ],
+          }
+        : {}),
+      ...(currentUser?.role === 'CLIENT'
+        ? {
+            client: {
+              OR: [
+                { email: currentUser.email },
+                { contacts: { some: { email: currentUser.email } } },
+                { portalAccesses: { some: { userId: currentUser.id, status: 'ACTIVE' } } },
+              ],
+            },
+          }
+        : {}),
       ...(search
         ? {
             OR: [
@@ -112,7 +134,7 @@ export const projectRepository = {
             avatar: true,
           },
         },
-        teamMembers: true,
+        projectMembers: true,
         milestones: true,
         activities: {
           take: 5,
@@ -144,7 +166,12 @@ export const projectRepository = {
     };
   },
 
-  async findById(id: string) {
+  async findById(id: string, currentUser?: { id: string; email: string; role: any }) {
+    if (currentUser) {
+      const { AuthorizationService } = require('../services/authorization.service');
+      const hasAccess = await AuthorizationService.canAccessProject(id, currentUser);
+      if (!hasAccess) return null;
+    }
     const project = await prisma.project.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -166,7 +193,7 @@ export const projectRepository = {
             avatar: true,
           },
         },
-        teamMembers: {
+        projectMembers: {
           include: {
             user: {
               select: {
@@ -283,14 +310,14 @@ export const projectRepository = {
 
   async create(
     data: Prisma.ProjectCreateInput & {
-      teamMembersInput?: Array<{ userId: string; role: string }>;
+      projectMembersInput?: Array<{ userId: string; role: string }>;
     },
   ) {
     // Generate unique project code CF-XXXXXX
     const randomSuffix = Math.random().toString(36).substring(2, 8).toUpperCase();
     const projectCode = `CF-${randomSuffix}`;
 
-    const { teamMembersInput, ...projectData } = data;
+    const { projectMembersInput, ...projectData } = data;
 
     const project = await prisma.project.create({
       data: {
@@ -300,25 +327,26 @@ export const projectRepository = {
     });
 
     // Automatically add Project Manager to project team
-    await prisma.projectTeam.create({
+    // Automatically add Project Manager to project members
+    await prisma.projectMember.create({
       data: {
         projectId: project.id,
         userId: project.projectManagerId,
-        role: 'Project Manager',
+        projectRole: 'Project Manager',
       },
     });
 
-    // Add additional team members if provided
-    if (teamMembersInput && teamMembersInput.length > 0) {
+    // Add additional members if provided
+    if (projectMembersInput && projectMembersInput.length > 0) {
       await Promise.all(
-        teamMembersInput
+        projectMembersInput
           .filter((tm) => tm.userId !== project.projectManagerId) // Avoid PM duplicate
           .map((tm) =>
-            prisma.projectTeam.create({
+            prisma.projectMember.create({
               data: {
                 projectId: project.id,
                 userId: tm.userId,
-                role: tm.role,
+                projectRole: tm.role,
               },
             }),
           ),
@@ -375,14 +403,14 @@ export const projectRepository = {
     return updatedProject;
   },
 
-  // Team Management
-  async addTeamMember(projectId: string, userId: string, role: string) {
-    return prisma.projectTeam.upsert({
+  // Project Member Management
+  async addProjectMember(projectId: string, userId: string, projectRole: string) {
+    return prisma.projectMember.upsert({
       where: {
         projectId_userId: { projectId, userId },
       },
-      update: { role },
-      create: { projectId, userId, role },
+      update: { projectRole },
+      create: { projectId, userId, projectRole },
       include: {
         user: {
           select: {
@@ -397,20 +425,20 @@ export const projectRepository = {
     });
   },
 
-  async removeTeamMember(projectId: string, userId: string) {
-    return prisma.projectTeam.delete({
+  async removeProjectMember(projectId: string, userId: string) {
+    return prisma.projectMember.delete({
       where: {
         projectId_userId: { projectId, userId },
       },
     });
   },
 
-  async updateTeamMemberRole(projectId: string, userId: string, role: string) {
-    return prisma.projectTeam.update({
+  async updateProjectMemberRole(projectId: string, userId: string, projectRole: string) {
+    return prisma.projectMember.update({
       where: {
         projectId_userId: { projectId, userId },
       },
-      data: { role },
+      data: { projectRole },
     });
   },
 

@@ -73,7 +73,7 @@ const upload = multer({
 clientRoutes.use(requireAuth);
 
 // --- Clients Endpoints ---
-clientRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+clientRoutes.get('/', requireRole('ADMIN'), (req, res, next) =>
   clientController.list(req, res).catch(next),
 );
 
@@ -88,16 +88,13 @@ clientRoutes.post(
   validate(portalLoginSchema),
   (req, res, next) => clientController.createPortalLogin(req, res).catch(next),
 );
-clientRoutes.get(
-  '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
-  validate(idParams, 'params'),
-  (req, res, next) => clientController.getById(req, res).catch(next),
+clientRoutes.get('/:id', requireRole('ADMIN'), validate(idParams, 'params'), (req, res, next) =>
+  clientController.getById(req, res).catch(next),
 );
 
 clientRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'), // Developers can update, but inside the controller we restrict modifying billing details
+  requireRole('ADMIN'), // Developers restricted
   validate(idParams, 'params'),
   validate(updateClientSchema),
   (req, res, next) => clientController.update(req, res).catch(next),
@@ -124,7 +121,7 @@ clientRoutes.post(
 // --- Contacts Endpoints ---
 clientRoutes.get(
   '/:id/contacts',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(idParams, 'params'),
   (req, res, next) => clientController.getContacts(req, res).catch(next),
 );
@@ -159,14 +156,14 @@ clientRoutes.delete(
 // --- Notes Endpoints ---
 clientRoutes.get(
   '/:id/notes',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(idParams, 'params'),
   (req, res, next) => clientController.getNotes(req, res).catch(next),
 );
 
 clientRoutes.post(
   '/:id/notes',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(idParams, 'params'),
   validate(clientNoteSchema),
   (req, res, next) => clientController.addNote(req, res).catch(next),
@@ -174,7 +171,7 @@ clientRoutes.post(
 
 clientRoutes.patch(
   '/notes/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(contactIdParams, 'params'),
   validate(clientNoteSchema),
   (req, res, next) => clientController.updateNote(req, res).catch(next),
@@ -182,7 +179,7 @@ clientRoutes.patch(
 
 clientRoutes.delete(
   '/notes/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(contactIdParams, 'params'),
   (req, res, next) => clientController.deleteNote(req, res).catch(next),
 );
@@ -190,7 +187,7 @@ clientRoutes.delete(
 // --- Files Endpoints ---
 clientRoutes.get(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(idParams, 'params'),
   (req, res, next) => clientController.getFiles(req, res).catch(next),
 );
@@ -198,7 +195,7 @@ clientRoutes.get(
 // POST handles multipart form file upload
 clientRoutes.post(
   '/:id/files',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(idParams, 'params'),
   (req, res, next) => {
     upload.single('file')(req, res, (err) => {
@@ -213,7 +210,7 @@ clientRoutes.post(
 
 clientRoutes.delete(
   '/files/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN'),
   validate(contactIdParams, 'params'),
   (req, res, next) => clientController.deleteFile(req, res).catch(next),
 );

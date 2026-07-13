@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { prisma } from '../config/prisma';
 import { taskRepository } from '../repositories/task.repository';
 import { taskActivityService } from '../services/task-activity.service';
+import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
 import fs from 'fs';
@@ -36,12 +37,7 @@ export const taskController = {
       sortOrder: sortOrder as 'asc' | 'desc',
     };
 
-    // Developers only view assigned tasks if no specific project filters
-    if (user.role === 'DEVELOPER' && (!projectId || projectId === 'ALL')) {
-      params.userId = user.id;
-    }
-
-    const items = await taskRepository.list(params);
+    const items = await taskRepository.list(params, user);
     return ok(res, 'Tasks retrieved successfully', items);
   },
 
@@ -49,13 +45,10 @@ export const taskController = {
     const user = req.user!;
     const id = req.params.id!;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
-    }
-
-    // Client verification: Clients can only see completed tasks
-    if (user.role === 'CLIENT' && task.status !== 'COMPLETED') {
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
       throw forbidden('Access denied');
     }
 
@@ -74,15 +67,19 @@ export const taskController = {
       return res.status(400).json({ success: false, message: 'Selected project does not exist' });
     }
 
+    // Verify creator has access to the target project
+    await AuthorizationService.assertProject(body.projectId, user);
+
     const taskData = {
       ...body,
       createdBy: user.id,
+      ...(user.role === 'STAFF' ? { assigneeIds: [user.id] } : {}),
     };
 
     const task = await taskRepository.create(taskData);
     await taskActivityService.log(task.id, 'TASK_CREATED', `Task "${task.title}" was created`);
 
-    const createdTask = await taskRepository.findById(task.id);
+    const createdTask = await taskRepository.findById(task.id, user);
     return ok(res, 'Task created successfully', createdTask, 201);
   },
 
@@ -91,13 +88,15 @@ export const taskController = {
     const id = req.params.id!;
     const body = req.body;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     // Developer restrictions: Can only edit status / checklist / log time if assigned to task
-    if (user.role === 'DEVELOPER') {
+    if (user.role === 'STAFF') {
       const isAssigned = task.assignees?.some((a: { id: string }) => a.id === user.id);
       if (!isAssigned) {
         throw forbidden('You are not assigned to this task');
@@ -127,16 +126,19 @@ export const taskController = {
       );
     }
 
-    const result = await taskRepository.findById(id);
+    const result = await taskRepository.findById(id, user);
     return ok(res, 'Task updated successfully', result);
   },
 
   async remove(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     await taskRepository.softDelete(id);
@@ -145,12 +147,15 @@ export const taskController = {
 
   // Drag and Drop move controller
   async moveTask(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const { status, prevTaskId, nextTaskId } = req.body;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     const updated = await taskRepository.moveTask(id, { status, prevTaskId, nextTaskId });
@@ -165,9 +170,11 @@ export const taskController = {
     const id = req.params.id!;
     const { comment } = req.body;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     const taskComment = await taskRepository.addComment(id, user.id, comment);
@@ -177,6 +184,7 @@ export const taskController = {
   },
 
   async updateComment(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
     const { comment } = req.body;
 
@@ -185,11 +193,14 @@ export const taskController = {
       throw notFound('Comment not found');
     }
 
+    await AuthorizationService.assertTask(exists.taskId, user);
+
     const updated = await taskRepository.updateComment(id, comment);
     return ok(res, 'Comment updated successfully', updated);
   },
 
   async deleteComment(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
 
     const exists = await taskRepository.findCommentById(id);
@@ -197,18 +208,23 @@ export const taskController = {
       throw notFound('Comment not found');
     }
 
+    await AuthorizationService.assertTask(exists.taskId, user);
+
     await taskRepository.deleteComment(id);
     return ok(res, 'Comment deleted successfully');
   },
 
   // Checklist Controllers
   async addChecklistItem(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id!;
     const { title } = req.body;
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     const item = await taskRepository.addChecklistItem(id, title);
@@ -218,6 +234,7 @@ export const taskController = {
   },
 
   async updateChecklistItem(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
     const body = req.body;
 
@@ -225,6 +242,8 @@ export const taskController = {
     if (!item) {
       throw notFound('Checklist item not found');
     }
+
+    await AuthorizationService.assertTask(item.taskId, user);
 
     const updated = await taskRepository.updateChecklistItem(id, body);
     await taskActivityService.log(
@@ -237,12 +256,15 @@ export const taskController = {
   },
 
   async deleteChecklistItem(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
 
     const item = await taskRepository.findChecklistItemById(id);
     if (!item) {
       throw notFound('Checklist item not found');
     }
+
+    await AuthorizationService.assertTask(item.taskId, user);
 
     await taskRepository.deleteChecklistItem(id);
     return ok(res, 'Checklist item deleted successfully');
@@ -258,9 +280,11 @@ export const taskController = {
       return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    const task = await taskRepository.findById(id);
+    const task = await taskRepository.findById(id, user);
     if (!task) {
-      throw notFound('Task not found');
+      const exists = await prisma.task.findFirst({ where: { id, deletedAt: null } });
+      if (!exists) throw notFound('Task not found');
+      throw forbidden('Access denied');
     }
 
     const fileUrl = `/uploads/${file.filename}`;
@@ -281,12 +305,15 @@ export const taskController = {
   },
 
   async deleteAttachment(req: Request, res: Response) {
+    const user = req.user!;
     const id = req.params.id as string;
 
     const attachment = await taskRepository.findAttachmentById(id);
     if (!attachment) {
       throw notFound('Attachment not found');
     }
+
+    await AuthorizationService.assertTask(attachment.taskId, user);
 
     // Delete physical file
     const filePath = path.join(__dirname, '../../uploads', path.basename(attachment.url));

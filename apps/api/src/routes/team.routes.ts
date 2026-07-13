@@ -40,7 +40,7 @@ const profileUpdateSchema = z.object({
 
 teamRoutes.use(requireAuth);
 
-teamRoutes.get('/', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+teamRoutes.get('/', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   teamController.list(req, res).catch(next),
 );
 
@@ -54,14 +54,14 @@ teamRoutes.post('/', requireRole('ADMIN'), (req, res, next) =>
 
 teamRoutes.get(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => teamController.getById(req, res).catch(next),
 );
 
 teamRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(profileUpdateSchema),
   (req, res, next) => teamController.update(req, res).catch(next),

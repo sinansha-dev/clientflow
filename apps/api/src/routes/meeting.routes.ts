@@ -21,27 +21,24 @@ meetingRoutes.use(requireAuth);
 calendarRoutes.use(requireAuth);
 
 // --- Meeting Routes ---
-meetingRoutes.get('/', requireRole('ADMIN', 'DEVELOPER', 'CLIENT'), (req, res, next) =>
+meetingRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
   meetingController.listMeetings(req, res).catch(next),
 );
 
-meetingRoutes.post(
-  '/',
-  requireRole('ADMIN', 'DEVELOPER'),
-  validate(meetingSchema),
-  (req, res, next) => meetingController.createMeeting(req, res).catch(next),
+meetingRoutes.post('/', requireRole('ADMIN', 'STAFF'), validate(meetingSchema), (req, res, next) =>
+  meetingController.createMeeting(req, res).catch(next),
 );
 
 meetingRoutes.get(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   (req, res, next) => meetingController.getMeetingById(req, res).catch(next),
 );
 
 meetingRoutes.patch(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(updateMeetingSchema),
   (req, res, next) => meetingController.updateMeeting(req, res).catch(next),
@@ -49,34 +46,34 @@ meetingRoutes.patch(
 
 meetingRoutes.delete(
   '/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => meetingController.deleteMeeting(req, res).catch(next),
 );
 
 meetingRoutes.post(
   '/:id/rsvp',
-  requireRole('ADMIN', 'DEVELOPER', 'CLIENT'),
+  requireRole('ADMIN', 'STAFF', 'CLIENT'),
   validate(idParams, 'params'),
   validate(z.object({ status: z.enum(['INVITED', 'ACCEPTED', 'DECLINED', 'ATTENDED']) })),
   (req, res, next) => meetingController.rsvp(req, res).catch(next),
 );
 
 // --- Calendar Routes ---
-calendarRoutes.get('/events', requireRole('ADMIN', 'DEVELOPER'), (req, res, next) =>
+calendarRoutes.get('/events', requireRole('ADMIN', 'STAFF'), (req, res, next) =>
   meetingController.listCalendarEvents(req, res).catch(next),
 );
 
 calendarRoutes.post(
   '/events',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(calendarEventSchema),
   (req, res, next) => meetingController.createCalendarEvent(req, res).catch(next),
 );
 
 calendarRoutes.patch(
   '/events/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   validate(updateCalendarEventSchema),
   (req, res, next) => meetingController.updateCalendarEvent(req, res).catch(next),
@@ -84,7 +81,7 @@ calendarRoutes.patch(
 
 calendarRoutes.delete(
   '/events/:id',
-  requireRole('ADMIN', 'DEVELOPER'),
+  requireRole('ADMIN', 'STAFF'),
   validate(idParams, 'params'),
   (req, res, next) => meetingController.deleteCalendarEvent(req, res).catch(next),
 );

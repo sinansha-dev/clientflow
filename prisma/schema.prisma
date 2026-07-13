@@ -9,7 +9,7 @@ datasource db {
 
 enum Role {
   ADMIN
-  DEVELOPER
+  STAFF
   CLIENT
 }
 
@@ -38,7 +38,8 @@ model User {
   resetTokens                 PasswordResetToken[]
   managedClients              Client[]             @relation("ManagerClients")
   clientNotes                 ClientNote[]
-  projectTeams                ProjectTeam[]
+  assignedProjects            ProjectMember[]      @relation("AssignedProjects")
+  createdMembers              ProjectMember[]      @relation("AssignedByMember")
   managedProjects             Project[]            @relation("ProjectManager")
   projectNotes                ProjectNote[]
   assignedTasks               Task[]               @relation("TaskAssignees")
@@ -224,7 +225,7 @@ model Project {
   archivedAt       DateTime?
   deletedAt        DateTime?
 
-  teamMembers          ProjectTeam[]
+  projectMembers       ProjectMember[]
   milestones           Milestone[]
   notes                ProjectNote[]
   files                ProjectFile[]
@@ -252,15 +253,20 @@ model Project {
   @@index([archivedAt])
 }
 
-model ProjectTeam {
-  projectId  String   @db.Uuid
-  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role       String
-  joinedDate DateTime @default(now())
+model ProjectMember {
+  id           String   @id @default(uuid()) @db.Uuid
+  projectId    String   @db.Uuid
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId       String   @db.Uuid
+  user         User     @relation("AssignedProjects", fields: [userId], references: [id], onDelete: Cascade)
+  projectRole  String   // "Project Manager", "Lead Developer", "Developer", "Designer", "QA", "Viewer"
+  joinedAt     DateTime @default(now())
+  assignedById String?  @db.Uuid
+  assignedBy   User?    @relation("AssignedByMember", fields: [assignedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  @@id([projectId, userId])
+  @@unique([projectId, userId])
   @@index([projectId])
   @@index([userId])
 }

@@ -71,7 +71,7 @@ export function ClientWizard({ onClose, onSuccess }: ClientWizardProps) {
         const response = await api.get('/users');
         // Filter users who can be account managers (ADMIN or DEVELOPER)
         const staff = (response.data.data?.users ?? []).filter(
-          (u: AuthUser) => u.role === 'ADMIN' || u.role === 'DEVELOPER',
+          (u: AuthUser) => u.role === 'ADMIN' || u.role === 'STAFF',
         );
         setManagers(staff);
       } catch (err) {
@@ -360,6 +360,7 @@ export function ClientWizard({ onClose, onSuccess }: ClientWizardProps) {
                       <option value="GBP">GBP (£)</option>
                       <option value="AUD">AUD ($)</option>
                       <option value="CAD">CAD ($)</option>
+                      <option value="INR">INR (₹)</option>
                     </select>
                     {errors.currency && (
                       <span className="text-xs text-danger">{errors.currency.message}</span>
