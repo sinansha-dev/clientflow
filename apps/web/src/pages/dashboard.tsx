@@ -41,7 +41,8 @@ type WidgetId =
   | 'team-productivity'
   | 'activity'
   | 'project-status'
-  | 'notifications';
+  | 'notifications'
+  | 'time-tracking';
 
 interface WidgetConfig {
   id: WidgetId;
@@ -88,6 +89,7 @@ export function DashboardPage() {
     }
     return [
       { id: 'stats', title: 'Workplace Metrics', visible: true, collapsed: false },
+      { id: 'time-tracking', title: 'Time Tracking Overview', visible: true, collapsed: false },
       { id: 'revenue', title: 'Revenue Analytics', visible: true, collapsed: false },
       { id: 'my-tasks', title: 'My Tasks Checklist', visible: true, collapsed: false },
       { id: 'projects', title: 'Active Projects Grid', visible: true, collapsed: false },
@@ -756,6 +758,168 @@ export function DashboardPage() {
                           <span className="text-[9px] text-foreground/45">
                             Collaborators: {collaboratorsCount}
                           </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            if (widget.id === 'time-tracking') {
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+
+              const todayLogs = timeLogs.filter((l) => {
+                const logDate = new Date(l.startTime);
+                logDate.setHours(0, 0, 0, 0);
+                return logDate.getTime() === today.getTime();
+              });
+              const todayTeamHours =
+                Math.round(todayLogs.reduce((sum, l) => sum + Number(l.duration || 0), 0) * 100) /
+                100;
+
+              const runningTimers = timeLogs.filter((l) => l.endTime === null);
+
+              const pendingApprovalsCount = timeLogs.filter(
+                (l) => l.status === 'SUBMITTED' && l.endTime !== null,
+              ).length;
+
+              const startOfWeek = new Date();
+              const day = startOfWeek.getDay();
+              const diff = startOfWeek.getDate() - day + (day === 0 ? -6 : 1);
+              startOfWeek.setDate(diff);
+              startOfWeek.setHours(0, 0, 0, 0);
+
+              const projHoursMap: Record<string, number> = {};
+              timeLogs.forEach((l) => {
+                const logDate = new Date(l.startTime);
+                if (logDate >= startOfWeek) {
+                  const pName = l.project?.projectName || 'No Project';
+                  projHoursMap[pName] = (projHoursMap[pName] || 0) + Number(l.duration || 0);
+                }
+              });
+              const topProjects = Object.entries(projHoursMap)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+              const weeklyTrend: Record<string, number> = {};
+              const daysOfWeekName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              daysOfWeekName.forEach((dayName) => (weeklyTrend[dayName] = 0));
+
+              timeLogs.forEach((l) => {
+                const logDate = new Date(l.startTime);
+                if (logDate >= startOfWeek) {
+                  const dayName = logDate.toLocaleDateString(undefined, { weekday: 'short' });
+                  if (dayName in weeklyTrend) {
+                    weeklyTrend[dayName] = (weeklyTrend[dayName] || 0) + Number(l.duration || 0);
+                  }
+                }
+              });
+              const weeklyTrendData = Object.entries(weeklyTrend).map(([name, hours]) => ({
+                name,
+                hours: Math.round(hours * 10) / 10,
+              }));
+              const maxWeeklyHours = Math.max(...weeklyTrendData.map((d) => d.hours), 1);
+
+              return (
+                <div key={widget.id} className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
+                      <Clock className="h-4 w-4 text-primary" /> {widget.title}
+                    </h2>
+                    {collapseToggle}
+                  </div>
+                  {!widget.collapsed && (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                            Today's Team Hours
+                          </span>
+                          <div className="h-7 w-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                            <Clock className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <span className="block text-2xl font-black text-foreground">
+                            {todayTeamHours} hrs
+                          </span>
+                          <span className="text-[9px] text-foreground/45 mt-0.5 block font-semibold">
+                            Total logged by team today
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm flex flex-col justify-between">
+                        <div className="flex justify-between items-start">
+                          <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                            Running / Pending
+                          </span>
+                          <div className="h-7 w-7 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center animate-pulse">
+                            <Clock className="h-4 w-4" />
+                          </div>
+                        </div>
+                        <div className="mt-2">
+                          <span className="block text-2xl font-black text-foreground">
+                            {runningTimers.length} active / {pendingApprovalsCount} pending
+                          </span>
+                          <span className="text-[9px] text-foreground/45 mt-0.5 block font-semibold">
+                            Stopwatches and submitted timesheets
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm lg:col-span-1 md:col-span-2">
+                        <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest mb-1.5 block">
+                          Weekly Hours Trend
+                        </span>
+                        <div className="h-14 flex items-end justify-between px-1">
+                          {weeklyTrendData.map((d) => (
+                            <div
+                              key={d.name}
+                              className="flex flex-col items-center flex-1 gap-1 group relative"
+                            >
+                              <div
+                                className="w-4 rounded-t bg-primary/70 hover:bg-primary transition-all duration-200"
+                                style={{
+                                  height: `${Math.max(2, (d.hours / maxWeeklyHours) * 32)}px`,
+                                }}
+                                title={`${d.hours} hrs`}
+                              />
+                              <span className="text-[8px] font-bold text-foreground/40">
+                                {d.name}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="bg-card border border-border rounded-2xl p-4 shadow-sm md:col-span-2 lg:col-span-3">
+                        <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest mb-3 block">
+                          Top Active Projects (This Week)
+                        </span>
+                        <div className="space-y-2.5 text-xs font-semibold">
+                          {topProjects.map(([name, hours]) => {
+                            const maxVal = Math.max(...topProjects.map((e) => e[1]), 1);
+                            const pct = Math.round((hours / maxVal) * 100);
+                            return (
+                              <div key={name} className="flex items-center justify-between gap-4">
+                                <span className="truncate w-1/3 text-foreground/80">{name}</span>
+                                <div className="h-2 flex-1 rounded-full bg-border overflow-hidden">
+                                  <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                                </div>
+                                <span className="text-primary font-bold w-12 text-right">
+                                  {hours} hrs
+                                </span>
+                              </div>
+                            );
+                          })}
+                          {topProjects.length === 0 && (
+                            <div className="text-center py-2 text-foreground/45 italic">
+                              No project hours logged this week.
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

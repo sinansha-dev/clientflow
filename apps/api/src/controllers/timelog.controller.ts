@@ -142,4 +142,22 @@ export const timelogController = {
 
     return ok(res, 'Productivity reports aggregated successfully', report);
   },
+
+  async bulkApprove(req: Request, res: Response) {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or empty IDs array' });
+    }
+    const result = await timelogRepository.bulkApprove(ids);
+    return ok(res, 'Time logs approved in bulk successfully', result);
+  },
+
+  async bulkReject(req: Request, res: Response) {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or empty IDs array' });
+    }
+    const result = await timelogRepository.bulkReject(ids);
+    return ok(res, 'Time logs change requested in bulk successfully', result);
+  },
 };

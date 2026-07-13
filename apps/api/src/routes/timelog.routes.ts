@@ -26,6 +26,20 @@ timelogRoutes.post(
   (req, res, next) => timelogController.create(req, res).catch(next),
 );
 
+timelogRoutes.post(
+  '/bulk-approve',
+  requireRole('ADMIN'),
+  validate(z.object({ ids: z.array(uuidSchema) })),
+  (req, res, next) => timelogController.bulkApprove(req, res).catch(next),
+);
+
+timelogRoutes.post(
+  '/bulk-reject',
+  requireRole('ADMIN'),
+  validate(z.object({ ids: z.array(uuidSchema) })),
+  (req, res, next) => timelogController.bulkReject(req, res).catch(next),
+);
+
 timelogRoutes.patch(
   '/:id',
   requireRole('ADMIN', 'DEVELOPER'),

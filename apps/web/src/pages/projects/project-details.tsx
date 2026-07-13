@@ -1682,6 +1682,216 @@ export function ProjectDetailsPage() {
           </div>
         )}
 
+        {/* --- TIME LOGS (TIMESHEETS) TAB --- */}
+        {activeTab === 'timelogs' && (
+          <div className="grid gap-6 animate-fade-in">
+            {/* Stat Cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Total Logged Hours
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  {Math.round(
+                    timeLogs.reduce((sum, log) => sum + Number(log.duration || 0), 0) * 100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Billable Hours
+                </span>
+                <span className="block text-2xl font-black text-emerald-600 mt-2">
+                  {Math.round(
+                    timeLogs
+                      .filter((l) => l.billable)
+                      .reduce((sum, log) => sum + Number(log.duration || 0), 0) * 100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Remaining Hours
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  {Math.round(
+                    Math.max(
+                      0,
+                      project.estimatedHours -
+                        timeLogs.reduce((sum, log) => sum + Number(log.duration || 0), 0),
+                    ) * 100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+                <span className="text-[10px] text-foreground/45 mt-1 font-semibold">
+                  Estimated: {project.estimatedHours} hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Revenue Generated
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  $
+                  {Math.round(
+                    timeLogs
+                      .filter((l) => l.status === 'APPROVED' && l.billable)
+                      .reduce(
+                        (sum, log) =>
+                          sum + Number(log.duration || 0) * Number(log.hourlyRateSnapshot || 0),
+                        0,
+                      ) * 100,
+                  ) / 100}
+                </span>
+              </Card>
+            </div>
+
+            {/* Developer and Task breakdowns */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
+                <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
+                  <User className="h-4.5 w-4.5 text-primary" /> Developer Breakdown
+                </h3>
+                <div className="space-y-4 text-xs font-semibold">
+                  {(() => {
+                    const devMap: Record<string, number> = {};
+                    timeLogs.forEach((log) => {
+                      const name = log.user
+                        ? `${log.user.firstName} ${log.user.lastName}`
+                        : 'Unassigned';
+                      devMap[name] = (devMap[name] || 0) + Number(log.duration || 0);
+                    });
+                    const devList = Object.entries(devMap).sort((a, b) => b[1] - a[1]);
+                    const maxVal = Math.max(...devList.map((e) => e[1]), 1);
+
+                    return devList.map(([name, hours]) => {
+                      const pct = Math.round((hours / maxVal) * 100);
+                      return (
+                        <div key={name}>
+                          <div className="flex justify-between mb-1">
+                            <span>{name}</span>
+                            <span className="text-primary font-bold">{hours} hrs</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-border overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                  {timeLogs.length === 0 && (
+                    <div className="text-center py-6 text-foreground/55 italic">
+                      No logs recorded.
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
+                <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
+                  <FileText className="h-4.5 w-4.5 text-primary" /> Task Breakdown
+                </h3>
+                <div className="space-y-4 text-xs font-semibold">
+                  {(() => {
+                    const taskMap: Record<string, number> = {};
+                    timeLogs.forEach((log) => {
+                      const title = log.task?.title || 'No Task linked';
+                      taskMap[title] = (taskMap[title] || 0) + Number(log.duration || 0);
+                    });
+                    const taskList = Object.entries(taskMap).sort((a, b) => b[1] - a[1]);
+                    const maxVal = Math.max(...taskList.map((e) => e[1]), 1);
+
+                    return taskList.map(([title, hours]) => {
+                      const pct = Math.round((hours / maxVal) * 100);
+                      return (
+                        <div key={title}>
+                          <div className="flex justify-between mb-1">
+                            <span className="truncate max-w-[260px]">{title}</span>
+                            <span className="text-primary font-bold">{hours} hrs</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-border overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                  {timeLogs.length === 0 && (
+                    <div className="text-center py-6 text-foreground/55 italic">
+                      No logs recorded.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            {/* Flat list of project logs */}
+            <Card className="p-0 overflow-hidden text-xs border border-border bg-card">
+              <div className="px-5 py-4 border-b border-border">
+                <h3 className="font-bold text-sm">Project Time Logs</h3>
+              </div>
+              <div className="overflow-x-auto font-semibold">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border font-bold text-foreground/75 uppercase tracking-wider text-[10px]">
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-5 py-3">Description</th>
+                      <th className="px-5 py-3">Task</th>
+                      <th className="px-5 py-3">Hours</th>
+                      <th className="px-5 py-3">Value</th>
+                      <th className="px-5 py-3">Status</th>
+                      <th className="px-5 py-3 text-right">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {timeLogs.map((log) => {
+                      const value =
+                        log.duration * (log.hourlyRateSnapshot || log.user?.hourlyRate || 0);
+                      return (
+                        <tr key={log.id} className="hover:bg-muted/10 transition">
+                          <td className="px-5 py-3.5 font-bold">
+                            {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'N/A'}
+                          </td>
+                          <td className="px-5 py-3.5 text-foreground/80">{log.description}</td>
+                          <td className="px-5 py-3.5 text-foreground/50">
+                            {log.task?.title || 'None Linked'}
+                          </td>
+                          <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                          <td className="px-5 py-3.5 text-emerald-600 font-bold">
+                            {log.billable ? `$${value.toFixed(2)}` : '-'}
+                          </td>
+                          <td className="px-5 py-3.5">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] font-black border ${log.status === 'APPROVED' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : log.status === 'SUBMITTED' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-slate-500/10 text-slate-500 border-slate-500/20'}`}
+                            >
+                              {log.endTime === null ? 'RUNNING' : log.status}
+                            </span>
+                          </td>
+                          <td className="px-5 py-3.5 text-right text-foreground/50">
+                            {new Date(log.startTime).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {timeLogs.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-5 py-10 text-center text-foreground/45 italic"
+                        >
+                          No time logs recorded on this project.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        )}
+
         {/* --- DEPLOYMENTS TAB --- */}
         {activeTab === 'deployments' && (
           <div className="grid gap-6">

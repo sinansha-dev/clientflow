@@ -29,9 +29,12 @@ import {
   Shield,
   Archive,
   RotateCcw,
+  TrendingUp,
+  Award,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'contacts' | 'projects' | 'invoices' | 'files' | 'notes' | 'activity';
+type TabType =
+  'overview' | 'contacts' | 'projects' | 'invoices' | 'files' | 'notes' | 'activity' | 'timelogs';
 
 export function ClientDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -445,6 +448,7 @@ export function ClientDetailsPage() {
             { id: 'files', label: 'Files', icon: Upload },
             { id: 'notes', label: 'Notes', icon: MessageSquare },
             { id: 'activity', label: 'Activity', icon: Clock },
+            { id: 'timelogs', label: 'Time Logs', icon: Clock },
           ] as const
         ).map((tab) => (
           <button
@@ -1370,6 +1374,222 @@ export function ClientDetailsPage() {
                 ))
               )}
             </div>
+          </div>
+        )}
+
+        {/* --- TAB CONTENT: TIMELOGS (TIMESHEETS) --- */}
+        {activeTab === 'timelogs' && (
+          <div className="grid gap-6 animate-fade-in">
+            {/* Stat Cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Total Hours
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  {Math.round(
+                    clientProjects
+                      .flatMap((p) => p.timeLogs ?? [])
+                      .reduce((sum, log) => sum + Number(log.duration || 0), 0) * 100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Billable Hours
+                </span>
+                <span className="block text-2xl font-black text-emerald-600 mt-2">
+                  {Math.round(
+                    clientProjects
+                      .flatMap((p) => p.timeLogs ?? [])
+                      .filter((l) => l.billable)
+                      .reduce((sum, log) => sum + Number(log.duration || 0), 0) * 100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Non-Billable Hours
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  {Math.round(
+                    (clientProjects
+                      .flatMap((p) => p.timeLogs ?? [])
+                      .reduce((sum, log) => sum + Number(log.duration || 0), 0) -
+                      clientProjects
+                        .flatMap((p) => p.timeLogs ?? [])
+                        .filter((l) => l.billable)
+                        .reduce((sum, log) => sum + Number(log.duration || 0), 0)) *
+                      100,
+                  ) / 100}{' '}
+                  hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Estimated Hours
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  {clientProjects.reduce((sum, p) => sum + Number(p.estimatedHours || 0), 0)} hrs
+                </span>
+              </Card>
+              <Card className="p-4 flex flex-col justify-between border border-border shadow-xs bg-card">
+                <span className="text-[10px] font-bold text-foreground/50 uppercase tracking-widest">
+                  Revenue Generated
+                </span>
+                <span className="block text-2xl font-black text-foreground mt-2">
+                  $
+                  {Math.round(
+                    clientProjects
+                      .flatMap((p) => p.timeLogs ?? [])
+                      .filter((l) => l.billable)
+                      .reduce(
+                        (sum, log) =>
+                          sum +
+                          Number(log.duration || 0) *
+                            Number(log.hourlyRateSnapshot || log.user?.hourlyRate || 0),
+                        0,
+                      ) * 100,
+                  ) / 100}
+                </span>
+              </Card>
+            </div>
+
+            {/* Developer Breakdown */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
+                <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
+                  <Users className="h-4.5 w-4.5 text-primary" /> Developer Breakdown
+                </h3>
+                <div className="space-y-4 text-xs font-semibold">
+                  {(() => {
+                    const devMap: Record<string, number> = {};
+                    clientProjects
+                      .flatMap((p) => p.timeLogs ?? [])
+                      .forEach((log) => {
+                        const name = log.user
+                          ? `${log.user.firstName} ${log.user.lastName}`
+                          : 'Unassigned';
+                        devMap[name] = (devMap[name] || 0) + Number(log.duration || 0);
+                      });
+                    const devList = Object.entries(devMap).sort((a, b) => b[1] - a[1]);
+                    const maxVal = Math.max(...devList.map((e) => e[1]), 1);
+
+                    return devList.map(([name, hours]) => {
+                      const pct = Math.round((hours / maxVal) * 100);
+                      return (
+                        <div key={name}>
+                          <div className="flex justify-between mb-1">
+                            <span>{name}</span>
+                            <span className="text-primary font-bold">{hours} hrs</span>
+                          </div>
+                          <div className="h-2 w-full rounded-full bg-border overflow-hidden">
+                            <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                  {clientProjects.flatMap((p) => p.timeLogs ?? []).length === 0 && (
+                    <div className="text-center py-6 text-foreground/55 italic">
+                      No logs recorded.
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="p-5 flex flex-col gap-4 border border-border bg-card">
+                <h3 className="text-sm font-bold flex items-center gap-1.5 text-foreground">
+                  <FolderKanban className="h-4.5 w-4.5 text-primary" /> Project Breakdown
+                </h3>
+                <div className="space-y-4 text-xs font-semibold">
+                  {clientProjects.map((p) => {
+                    const hours = (p.timeLogs ?? []).reduce(
+                      (sum, log) => sum + Number(log.duration || 0),
+                      0,
+                    );
+                    const maxHours = Math.max(
+                      ...clientProjects.map((pr) =>
+                        (pr.timeLogs ?? []).reduce((s, l) => s + Number(l.duration || 0), 0),
+                      ),
+                      1,
+                    );
+                    const pct = Math.round((hours / maxHours) * 100);
+                    return (
+                      <div key={p.id}>
+                        <div className="flex justify-between mb-1">
+                          <span>{p.projectName}</span>
+                          <span className="text-primary font-bold">{hours} hrs</span>
+                        </div>
+                        <div className="h-2 w-full rounded-full bg-border overflow-hidden">
+                          <div className="h-full bg-primary" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {clientProjects.length === 0 && (
+                    <div className="text-center py-6 text-foreground/55 italic">
+                      No projects linked to client.
+                    </div>
+                  )}
+                </div>
+              </Card>
+            </div>
+
+            {/* Recent Time Logs */}
+            <Card className="p-0 overflow-hidden text-xs border border-border bg-card">
+              <div className="px-5 py-4 border-b border-border">
+                <h3 className="font-bold text-sm">Recent Time Logs</h3>
+              </div>
+              <div className="overflow-x-auto font-semibold">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-muted/30 border-b border-border font-bold text-foreground/75 uppercase tracking-wider text-[10px]">
+                      <th className="px-5 py-3">Member</th>
+                      <th className="px-5 py-3">Project</th>
+                      <th className="px-5 py-3">Description</th>
+                      <th className="px-5 py-3">Hours</th>
+                      <th className="px-5 py-3 text-right">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {clientProjects
+                      .flatMap((p) =>
+                        (p.timeLogs ?? []).map((l) => ({ ...l, projectName: p.projectName })),
+                      )
+                      .sort(
+                        (a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime(),
+                      )
+                      .slice(0, 10)
+                      .map((log) => (
+                        <tr key={log.id} className="hover:bg-muted/10 transition">
+                          <td className="px-5 py-3.5 font-bold">
+                            {log.user ? `${log.user.firstName} ${log.user.lastName}` : 'N/A'}
+                          </td>
+                          <td className="px-5 py-3.5 font-bold">{log.projectName}</td>
+                          <td className="px-5 py-3.5 text-foreground/80">{log.description}</td>
+                          <td className="px-5 py-3.5 font-bold text-primary">{log.duration} hrs</td>
+                          <td className="px-5 py-3.5 text-right text-foreground/50">
+                            {new Date(log.startTime).toLocaleDateString()}
+                          </td>
+                        </tr>
+                      ))}
+                    {clientProjects.flatMap((p) => p.timeLogs ?? []).length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-5 py-10 text-center text-foreground/45 italic"
+                        >
+                          No time logs recorded for this client.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         )}
 

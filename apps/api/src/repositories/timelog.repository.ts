@@ -271,6 +271,52 @@ export const timelogRepository = {
     return updated;
   },
 
+  async bulkApprove(ids: string[]) {
+    const logs = await prisma.timeLog.findMany({
+      where: { id: { in: ids }, status: 'SUBMITTED' },
+      select: { id: true, projectId: true, taskId: true },
+    });
+    if (logs.length === 0) return { count: 0 };
+
+    const updated = await prisma.timeLog.updateMany({
+      where: { id: { in: logs.map((l) => l.id) } },
+      data: { status: 'APPROVED' },
+    });
+
+    const projectIds = Array.from(new Set(logs.map((l) => l.projectId)));
+    const taskIds = Array.from(new Set(logs.map((l) => l.taskId).filter(Boolean))) as string[];
+
+    await Promise.all([
+      ...projectIds.map((pid) => syncProjectActualHours(pid)),
+      ...taskIds.map((tid) => syncTaskActualHours(tid)),
+    ]);
+
+    return updated;
+  },
+
+  async bulkReject(ids: string[]) {
+    const logs = await prisma.timeLog.findMany({
+      where: { id: { in: ids }, status: 'SUBMITTED' },
+      select: { id: true, projectId: true, taskId: true },
+    });
+    if (logs.length === 0) return { count: 0 };
+
+    const updated = await prisma.timeLog.updateMany({
+      where: { id: { in: logs.map((l) => l.id) } },
+      data: { status: 'REJECTED' },
+    });
+
+    const projectIds = Array.from(new Set(logs.map((l) => l.projectId)));
+    const taskIds = Array.from(new Set(logs.map((l) => l.taskId).filter(Boolean))) as string[];
+
+    await Promise.all([
+      ...projectIds.map((pid) => syncProjectActualHours(pid)),
+      ...taskIds.map((tid) => syncTaskActualHours(tid)),
+    ]);
+
+    return updated;
+  },
+
   async getProductivityReport(params: {
     startDate?: string;
     endDate?: string;
