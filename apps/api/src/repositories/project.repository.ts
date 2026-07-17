@@ -287,6 +287,9 @@ export const projectRepository = {
         activities: {
           orderBy: { createdAt: 'desc' },
         },
+        recurringServices: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 

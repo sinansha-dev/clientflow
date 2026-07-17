@@ -144,6 +144,16 @@ export function ClientPortalPage() {
   const [folderName, setFolderName] = useState('');
   const [uploading, setUploading] = useState(false);
 
+  const projInvoices = useMemo(() => {
+    if (!project) return [];
+    return (project.invoices || []).filter((i: any) => i.type !== 'RECURRING');
+  }, [project]);
+
+  const recurringInvoices = useMemo(() => {
+    if (!project) return [];
+    return (project.invoices || []).filter((i: any) => i.type === 'RECURRING');
+  }, [project]);
+
   async function loadDashboard() {
     const [dashboardRes, projectsRes] = await Promise.all([
       api.get('/portal/dashboard'),
@@ -652,13 +662,14 @@ export function ClientPortalPage() {
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-foreground mb-2">Invoices</h3>
+                <h3 className="text-sm font-bold text-foreground mb-2">Project Invoices</h3>
                 <Card className="p-0 overflow-hidden">
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm">
                       <thead>
                         <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
                           <th className="px-6 py-4">Invoice Number</th>
+                          <th className="px-6 py-4">Type</th>
                           <th className="px-6 py-4">Amount</th>
                           <th className="px-6 py-4">Balance</th>
                           <th className="px-6 py-4">Due Date</th>
@@ -667,10 +678,16 @@ export function ClientPortalPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {project.invoices?.length ? (
-                          project.invoices.map((invoice) => (
-                            <tr key={invoice.id} className="border-b border-border">
+                        {projInvoices.length ? (
+                          projInvoices.map((invoice: any) => (
+                            <tr
+                              key={invoice.id}
+                              className="border-b border-border hover:bg-muted/5 transition"
+                            >
                               <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                              <td className="px-6 py-4 font-semibold text-foreground/60">
+                                {invoice.type || 'PROJECT'}
+                              </td>
                               <td className="px-6 py-4">
                                 {invoice.currency} {invoice.total.toLocaleString()}
                               </td>
@@ -680,7 +697,23 @@ export function ClientPortalPage() {
                               <td className="px-6 py-4">
                                 {new Date(invoice.dueDate).toLocaleDateString()}
                               </td>
-                              <td className="px-6 py-4 font-bold text-primary">{invoice.status}</td>
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    invoice.status === 'PAID'
+                                      ? 'bg-emerald-500/10 text-emerald-600'
+                                      : invoice.status === 'PARTIALLY_PAID'
+                                        ? 'bg-indigo-500/10 text-indigo-600'
+                                        : invoice.status === 'SENT'
+                                          ? 'bg-blue-500/10 text-blue-600'
+                                          : invoice.status === 'OVERDUE'
+                                            ? 'bg-rose-500/10 text-rose-600'
+                                            : 'bg-amber-500/10 text-amber-600'
+                                  }`}
+                                >
+                                  {invoice.status}
+                                </span>
+                              </td>
                               <td className="px-6 py-4">
                                 <a
                                   href={`${api.defaults.baseURL}/invoices/${invoice.id}/pdf`}
@@ -696,10 +729,109 @@ export function ClientPortalPage() {
                         ) : (
                           <tr>
                             <td
-                              colSpan={6}
+                              colSpan={7}
                               className="px-6 py-12 text-center text-foreground/45 italic"
                             >
-                              No invoices found.
+                              No project invoices found.
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </Card>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-bold text-foreground mb-2">
+                  Recurring Service Invoices (AMC)
+                </h3>
+                <Card className="p-0 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                          <th className="px-6 py-4">Invoice Number</th>
+                          <th className="px-6 py-4">Billing Period</th>
+                          <th className="px-6 py-4">Amount</th>
+                          <th className="px-6 py-4">Balance</th>
+                          <th className="px-6 py-4">Next Renewal</th>
+                          <th className="px-6 py-4">Status</th>
+                          <th className="px-6 py-4">PDF</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {recurringInvoices.length ? (
+                          recurringInvoices.map((invoice: any) => (
+                            <tr
+                              key={invoice.id}
+                              className="border-b border-border hover:bg-muted/5 transition animate-fade-in"
+                            >
+                              <td className="px-6 py-4 font-bold">
+                                {invoice.invoiceNumber}
+                                <span className="text-[10px] text-foreground/50 block font-normal mt-0.5">
+                                  {invoice.recurringService?.name || 'AMC Retainer'}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 font-medium text-foreground/75">
+                                {invoice.billingPeriodFrom && invoice.billingPeriodTo ? (
+                                  <span>
+                                    {new Date(invoice.billingPeriodFrom).toLocaleDateString()} –{' '}
+                                    {new Date(invoice.billingPeriodTo).toLocaleDateString()}
+                                  </span>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                {invoice.currency} {invoice.total.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 font-bold text-danger">
+                                {invoice.currency} {invoice.balanceDue.toLocaleString()}
+                              </td>
+                              <td className="px-6 py-4 font-semibold text-foreground/60">
+                                {invoice.recurringService?.nextInvoiceDate
+                                  ? new Date(
+                                      invoice.recurringService.nextInvoiceDate,
+                                    ).toLocaleDateString()
+                                  : '—'}
+                              </td>
+                              <td className="px-6 py-4">
+                                <span
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    invoice.status === 'PAID'
+                                      ? 'bg-emerald-500/10 text-emerald-600'
+                                      : invoice.status === 'PARTIALLY_PAID'
+                                        ? 'bg-indigo-500/10 text-indigo-600'
+                                        : invoice.status === 'SENT'
+                                          ? 'bg-blue-500/10 text-blue-600'
+                                          : invoice.status === 'OVERDUE'
+                                            ? 'bg-rose-500/10 text-rose-600'
+                                            : 'bg-amber-500/10 text-amber-600'
+                                  }`}
+                                >
+                                  {invoice.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                <a
+                                  href={`${api.defaults.baseURL}/invoices/${invoice.id}/pdf`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-primary hover:underline font-bold text-xs inline-flex items-center gap-1"
+                                >
+                                  <Download className="h-3 w-3" /> Download
+                                </a>
+                              </td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="px-6 py-12 text-center text-foreground/45 italic"
+                            >
+                              No recurring service invoices found.
                             </td>
                           </tr>
                         )}

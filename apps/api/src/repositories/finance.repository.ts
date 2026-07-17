@@ -32,11 +32,11 @@ function totals(items: LineItemInput[] = [], discount = 0) {
   return { items: prepared, subtotal, tax, total, discount: money(Number(discount) || 0) };
 }
 
-async function nextNumber(prefix: 'QTN' | 'INV') {
+async function nextNumber(typeOrPrefix: any) {
   const year = new Date().getFullYear();
-  const prefixPattern = `${prefix}-${year}-`;
 
-  if (prefix === 'QTN') {
+  if (typeOrPrefix === 'QTN') {
+    const prefixPattern = `QTN-${year}-`;
     const latest = await prisma.quotation.findFirst({
       where: { quoteNumber: { startsWith: prefixPattern } },
       orderBy: { quoteNumber: 'desc' },
@@ -49,6 +49,15 @@ async function nextNumber(prefix: 'QTN' | 'INV') {
     const nextNum = isNaN(lastNum) ? 1 : lastNum + 1;
     return `${prefixPattern}${String(nextNum).padStart(4, '0')}`;
   } else {
+    let prefix = 'INV'; // default for PROJECT
+    if (typeOrPrefix === 'ADVANCE') prefix = 'ADV';
+    else if (typeOrPrefix === 'MILESTONE') prefix = 'MIL';
+    else if (typeOrPrefix === 'FINAL') prefix = 'FIN';
+    else if (typeOrPrefix === 'RECURRING') prefix = 'AMC';
+    else if (typeOrPrefix === 'CREDIT_NOTE') prefix = 'CRN';
+    else if (typeof typeOrPrefix === 'string' && typeOrPrefix.length <= 4) prefix = typeOrPrefix;
+
+    const prefixPattern = `${prefix}-${year}-`;
     const latest = await prisma.invoice.findFirst({
       where: { invoiceNumber: { startsWith: prefixPattern } },
       orderBy: { invoiceNumber: 'desc' },
@@ -117,6 +126,7 @@ const invoiceInclude = {
   items: true,
   payments: true,
   creator: true,
+  recurringService: true,
 } satisfies Prisma.InvoiceInclude;
 const paymentInclude = {
   invoice: { include: { project: true } },
@@ -286,11 +296,16 @@ export const financeRepository = {
   async createInvoice(userId: string, data: any) {
     const client = await prisma.client.findUnique({ where: { id: data.clientId } });
     const calculated = totals(data.items, data.discount);
+    const invoiceType = data.type || 'PROJECT';
     return prisma.invoice.create({
       data: {
-        invoiceNumber: await nextNumber('INV'),
+        invoiceNumber: await nextNumber(invoiceType),
         clientId: data.clientId,
         projectId: data.projectId || null,
+        type: invoiceType,
+        billingPeriodFrom: data.billingPeriodFrom ? new Date(data.billingPeriodFrom) : null,
+        billingPeriodTo: data.billingPeriodTo ? new Date(data.billingPeriodTo) : null,
+        recurringServiceId: data.recurringServiceId || null,
         title: data.title || 'Invoice',
         scope: data.scope || null,
         issueDate: new Date(data.issueDate),
@@ -333,6 +348,18 @@ export const financeRepository = {
           ...rest,
           issueDate: rest.issueDate ? new Date(rest.issueDate) : undefined,
           dueDate: rest.dueDate ? new Date(rest.dueDate) : undefined,
+          billingPeriodFrom:
+            rest.billingPeriodFrom === null
+              ? null
+              : rest.billingPeriodFrom
+                ? new Date(rest.billingPeriodFrom)
+                : undefined,
+          billingPeriodTo:
+            rest.billingPeriodTo === null
+              ? null
+              : rest.billingPeriodTo
+                ? new Date(rest.billingPeriodTo)
+                : undefined,
           projectId: rest.projectId === '' ? null : rest.projectId,
           subtotal: calculated?.subtotal,
           tax: calculated?.tax,
@@ -499,15 +526,70 @@ export const financeRepository = {
   },
 
   async financeReport() {
-    const [invoices, payments, expenses, quotations] = await Promise.all([
-      prisma.invoice.findMany({ where: { deletedAt: null } }),
+    const [invoices, payments, expenses, quotations, recurringServices] = await Promise.all([
+      prisma.invoice.findMany({ where: { deletedAt: null }, include: { payments: true } }),
       prisma.payment.findMany(),
       prisma.expense.findMany({ where: { deletedAt: null } }),
       prisma.quotation.findMany({ where: { deletedAt: null } }),
+      prisma.recurringService.findMany(),
     ]);
+
     const revenue = money(payments.reduce((sum, payment) => sum + payment.amount, 0));
     const outstanding = money(invoices.reduce((sum, invoice) => sum + invoice.balanceDue, 0));
     const expenseTotal = money(expenses.reduce((sum, expense) => sum + expense.amount, 0));
+
+    // Segmented recurring vs project metrics
+    const recurringInvoices = invoices.filter((inv) => inv.type === 'RECURRING');
+    const projectInvoices = invoices.filter((inv) => inv.type !== 'RECURRING');
+
+    const recurringRevenue = money(
+      payments
+        .filter((pay) => {
+          const inv = invoices.find((i) => i.id === pay.invoiceId);
+          return inv?.type === 'RECURRING';
+        })
+        .reduce((sum, p) => sum + p.amount, 0),
+    );
+
+    const projectRevenue = money(
+      payments
+        .filter((pay) => {
+          const inv = invoices.find((i) => i.id === pay.invoiceId);
+          return inv?.type !== 'RECURRING';
+        })
+        .reduce((sum, p) => sum + p.amount, 0),
+    );
+
+    const activeContracts = recurringServices.filter((s) => s.status === 'ACTIVE').length;
+    const pausedContracts = recurringServices.filter((s) => s.status === 'PAUSED').length;
+    const cancelledContracts = recurringServices.filter((s) => s.status === 'CANCELLED').length;
+
+    const mrr = money(
+      recurringServices
+        .filter((s) => s.status === 'ACTIVE')
+        .reduce((sum, s) => {
+          if (s.interval === 'DAILY') return sum + s.amount * 30;
+          if (s.interval === 'WEEKLY') return sum + s.amount * 4.33;
+          if (s.interval === 'MONTHLY') return sum + s.amount;
+          if (s.interval === 'YEARLY') return sum + s.amount / 12;
+          return sum;
+        }, 0),
+    );
+
+    const arr = money(
+      recurringServices
+        .filter((s) => s.status === 'ACTIVE')
+        .reduce((sum, s) => {
+          if (s.interval === 'DAILY') return sum + s.amount * 365;
+          if (s.interval === 'WEEKLY') return sum + s.amount * 52;
+          if (s.interval === 'MONTHLY') return sum + s.amount * 12;
+          if (s.interval === 'YEARLY') return sum + s.amount;
+          return sum;
+        }, 0),
+    );
+
+    const revenueForecast = money(outstanding + Number(mrr) * 12);
+
     return {
       revenue,
       outstanding,
@@ -516,6 +598,15 @@ export const financeRepository = {
       draftQuotes: quotations.filter((quote) => quote.status === 'DRAFT').length,
       openInvoices: invoices.filter((invoice) => !['PAID', 'CANCELLED'].includes(invoice.status))
         .length,
+      recurringRevenue,
+      projectRevenue,
+      recurringInvoiceCount: recurringInvoices.length,
+      activeContracts,
+      pausedContracts,
+      cancelledContracts,
+      mrr,
+      arr,
+      revenueForecast,
     };
   },
 
@@ -626,12 +717,25 @@ export const financeRepository = {
     const due = new Date();
     due.setDate(due.getDate() + 30);
 
+    let invoiceType: 'PROJECT' | 'ADVANCE' | 'MILESTONE' | 'FINAL' = 'PROJECT';
+    const bPlanType = stage.billingPlan.billingType;
+    if (bPlanType === 'MILESTONE') {
+      invoiceType = 'MILESTONE';
+    } else if (bPlanType === 'ADVANCE_BALANCE') {
+      if (stage.name.toLowerCase().includes('advance')) {
+        invoiceType = 'ADVANCE';
+      } else {
+        invoiceType = 'FINAL';
+      }
+    }
+
     const invoice = await prisma.invoice.create({
       data: {
-        invoiceNumber: await nextNumber('INV'),
+        invoiceNumber: await nextNumber(invoiceType),
         clientId: project.clientId,
         projectId: project.id,
         billingStageId: stage.id,
+        type: invoiceType,
         issueDate: new Date(),
         dueDate: due,
         status: 'DRAFT',
@@ -730,11 +834,30 @@ export const financeRepository = {
       const due = new Date();
       due.setDate(due.getDate() + 30);
 
+      // Period dates calculation
+      const periodFrom = new Date(service.nextInvoiceDate);
+      const periodTo = new Date(service.nextInvoiceDate);
+      if (service.interval === 'DAILY') {
+        periodTo.setDate(periodTo.getDate() + 0);
+      } else if (service.interval === 'WEEKLY') {
+        periodTo.setDate(periodTo.getDate() + 6);
+      } else if (service.interval === 'MONTHLY') {
+        periodTo.setMonth(periodTo.getMonth() + 1);
+        periodTo.setDate(periodTo.getDate() - 1);
+      } else if (service.interval === 'YEARLY') {
+        periodTo.setFullYear(periodTo.getFullYear() + 1);
+        periodTo.setDate(periodTo.getDate() - 1);
+      }
+
       const invoice = await prisma.invoice.create({
         data: {
-          invoiceNumber: await nextNumber('INV'),
+          invoiceNumber: await nextNumber('RECURRING'),
           clientId: project.clientId,
           projectId: project.id,
+          type: 'RECURRING',
+          billingPeriodFrom: periodFrom,
+          billingPeriodTo: periodTo,
+          recurringServiceId: service.id,
           issueDate: now,
           dueDate: due,
           status: 'DRAFT',
@@ -750,7 +873,7 @@ export const financeRepository = {
             create: [
               {
                 name: service.name,
-                description: `Recurring billing cycle renewal`,
+                description: `Recurring billing cycle renewal: ${service.interval.toLowerCase()} subscription`,
                 quantity: 1,
                 unitPrice: service.amount,
                 taxRate: 0,
@@ -779,6 +902,32 @@ export const financeRepository = {
           nextInvoiceDate: nextDate,
         },
       });
+
+      // Format period string for logs
+      const fmtPeriod = `${periodFrom.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })} – ${periodTo.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}`;
+
+      // Dispatch Activity Feed Logging
+      try {
+        const { activityService } = require('../services/activity.service');
+        const { projectActivityService } = require('../services/project-activity.service');
+        await activityService.log(
+          project.clientId,
+          'INVOICE_GENERATED',
+          `Automatic recurring invoice ${invoice.invoiceNumber} generated for ${service.name} (${fmtPeriod})`,
+        );
+        await projectActivityService.log(
+          project.id,
+          'INVOICE_GENERATED',
+          `Automatic recurring invoice ${invoice.invoiceNumber} generated for ${service.name} (${fmtPeriod})`,
+        );
+      } catch (err) {
+        console.error('Failed to log recurring service activity:', err);
+      }
+
+      // Log notification message to stdout
+      console.log(
+        `[NOTIFICATION] Recurring Invoice Generated | Client: ${client.companyName} | Contract: ${service.name} | Period: ${fmtPeriod} | Amount: ${service.amount}`,
+      );
 
       generatedInvoices.push(invoice);
     }

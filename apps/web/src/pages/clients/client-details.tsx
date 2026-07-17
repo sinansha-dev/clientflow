@@ -1149,7 +1149,13 @@ export function ClientDetailsPage() {
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   invoice.status === 'PAID'
                                     ? 'bg-emerald-500/10 text-emerald-600'
-                                    : 'bg-amber-500/10 text-amber-600'
+                                    : invoice.status === 'PARTIALLY_PAID'
+                                      ? 'bg-indigo-500/10 text-indigo-600'
+                                      : invoice.status === 'SENT'
+                                        ? 'bg-blue-500/10 text-blue-600'
+                                        : invoice.status === 'OVERDUE'
+                                          ? 'bg-rose-500/10 text-rose-600'
+                                          : 'bg-amber-500/10 text-amber-600'
                                 }`}
                               >
                                 {invoice.status}

@@ -1431,7 +1431,6 @@ export function ProjectDetailsPage() {
                 </span>
               </div>
             </div>
-
             {/* Billing Progress bar */}
             <Card className="p-4">
               <div className="flex justify-between items-center text-xs font-bold text-foreground/60 mb-2">
@@ -1461,7 +1460,6 @@ export function ProjectDetailsPage() {
                 />
               </div>
             </Card>
-
             {/* 2. Billing Plan configuration or list */}
             {!billingPlan ? (
               <Card className="p-6 text-center border border-dashed border-primary/20 bg-primary/5">
@@ -1803,8 +1801,154 @@ export function ProjectDetailsPage() {
                   </Card>
                 </div>
               </div>
-            )}
-
+            )}{' '}
+            {/* Recurring Service Contracts (AMC) */}
+            <div>
+              <h3 className="text-sm font-bold text-foreground mb-3">
+                Recurring Service Contracts (AMC)
+              </h3>
+              <Card className="p-0 overflow-hidden border border-border mb-6">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                        <th className="px-6 py-4">Contract Name</th>
+                        <th className="px-6 py-4">Billing Rate</th>
+                        <th className="px-6 py-4">Interval</th>
+                        <th className="px-6 py-4">Next Invoice Date</th>
+                        <th className="px-6 py-4">Last Invoice Date</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(project as any).recurringServices?.length ? (
+                        (project as any).recurringServices.map((service: any) => (
+                          <tr
+                            key={service.id}
+                            className="border-b border-border hover:bg-muted/5 transition animate-fade-in"
+                          >
+                            <td className="px-6 py-4 font-bold text-foreground">{service.name}</td>
+                            <td className="px-6 py-4 font-semibold text-primary">
+                              ${service.amount.toLocaleString()}
+                            </td>
+                            <td className="px-6 py-4 font-semibold text-foreground/60">
+                              {service.interval}
+                            </td>
+                            <td className="px-6 py-4">
+                              {new Date(service.nextInvoiceDate).toLocaleDateString()}
+                            </td>
+                            <td className="px-6 py-4 text-foreground/60">
+                              {service.lastInvoicedDate
+                                ? new Date(service.lastInvoicedDate).toLocaleDateString()
+                                : '—'}
+                            </td>
+                            <td className="px-6 py-4">
+                              <span
+                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  service.status === 'ACTIVE'
+                                    ? 'bg-emerald-500/10 text-emerald-600'
+                                    : service.status === 'PAUSED'
+                                      ? 'bg-amber-500/10 text-amber-600'
+                                      : 'bg-danger/10 text-danger'
+                                }`}
+                              >
+                                {service.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 flex items-center gap-2">
+                              {service.status === 'ACTIVE' ? (
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 px-2.5 text-xs font-bold"
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/recurring-services/${service.id}/status`, {
+                                        status: 'PAUSED',
+                                      });
+                                      notify({
+                                        type: 'success',
+                                        title: 'Contract paused successfully',
+                                      });
+                                      loadProjectDetails();
+                                    } catch (err) {
+                                      notify({
+                                        type: 'error',
+                                        title: 'Action failed',
+                                        message: errorMessage(err),
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Pause
+                                </Button>
+                              ) : (
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 px-2.5 text-xs font-bold text-emerald-600"
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/recurring-services/${service.id}/status`, {
+                                        status: 'ACTIVE',
+                                      });
+                                      notify({
+                                        type: 'success',
+                                        title: 'Contract resumed successfully',
+                                      });
+                                      loadProjectDetails();
+                                    } catch (err) {
+                                      notify({
+                                        type: 'error',
+                                        title: 'Action failed',
+                                        message: errorMessage(err),
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Resume
+                                </Button>
+                              )}
+                              {service.status !== 'CANCELLED' && (
+                                <Button
+                                  variant="ghost"
+                                  className="h-8 px-2.5 text-xs font-bold text-danger hover:bg-danger/10"
+                                  onClick={async () => {
+                                    try {
+                                      await api.patch(`/recurring-services/${service.id}/status`, {
+                                        status: 'CANCELLED',
+                                      });
+                                      notify({ type: 'success', title: 'Contract cancelled' });
+                                      loadProjectDetails();
+                                    } catch (err) {
+                                      notify({
+                                        type: 'error',
+                                        title: 'Action failed',
+                                        message: errorMessage(err),
+                                      });
+                                    }
+                                  }}
+                                >
+                                  Cancel
+                                </Button>
+                              )}
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-6 py-12 text-center text-foreground/45 italic"
+                          >
+                            No recurring service contracts configured.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </Card>
+            </div>
             {/* Invoices List table */}
             <div>
               <h3 className="text-sm font-bold text-foreground mb-3">Project Invoice History</h3>
@@ -1827,9 +1971,39 @@ export function ProjectDetailsPage() {
                         project.invoices.map((invoice) => (
                           <tr
                             key={invoice.id}
-                            className="border-b border-border hover:bg-muted/5 transition"
+                            className="border-b border-border hover:bg-muted/5 transition animate-fade-in"
                           >
-                            <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                            <td className="px-6 py-4 font-bold">
+                              <span className="flex items-center gap-1.5">
+                                {invoice.invoiceNumber}
+                                {invoice.type && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[8px] font-bold border tracking-wide uppercase ${
+                                      invoice.type === 'RECURRING'
+                                        ? 'bg-purple-500/10 text-purple-600 border-purple-500/20'
+                                        : invoice.type === 'ADVANCE'
+                                          ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                                          : invoice.type === 'MILESTONE'
+                                            ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
+                                            : invoice.type === 'FINAL'
+                                              ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                              : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                                    }`}
+                                  >
+                                    {invoice.type.replace('_', ' ')}
+                                  </span>
+                                )}
+                              </span>
+                              {invoice.type === 'RECURRING' &&
+                                invoice.billingPeriodFrom &&
+                                invoice.billingPeriodTo && (
+                                  <span className="text-[9px] text-foreground/55 font-medium block mt-0.5">
+                                    Period:{' '}
+                                    {new Date(invoice.billingPeriodFrom).toLocaleDateString()} –{' '}
+                                    {new Date(invoice.billingPeriodTo).toLocaleDateString()}
+                                  </span>
+                                )}
+                            </td>
                             <td className="px-6 py-4">
                               {invoice.billingStage?.name || 'Ad-hoc invoice'}
                             </td>
@@ -1847,7 +2021,13 @@ export function ProjectDetailsPage() {
                                 className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                                   invoice.status === 'PAID'
                                     ? 'bg-emerald-500/10 text-emerald-600'
-                                    : 'bg-amber-500/10 text-amber-600'
+                                    : invoice.status === 'PARTIALLY_PAID'
+                                      ? 'bg-indigo-500/10 text-indigo-600'
+                                      : invoice.status === 'SENT'
+                                        ? 'bg-blue-500/10 text-blue-600'
+                                        : invoice.status === 'OVERDUE'
+                                          ? 'bg-rose-500/10 text-rose-600'
+                                          : 'bg-amber-500/10 text-amber-600'
                                 }`}
                               >
                                 {invoice.status}
@@ -1868,7 +2048,7 @@ export function ProjectDetailsPage() {
                       ) : (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="px-6 py-12 text-center text-foreground/45 italic"
                           >
                             No invoices generated for this project.

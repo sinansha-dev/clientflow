@@ -75,6 +75,10 @@ export function FinanceWorkspacePage() {
     issueDate: today,
     dueDate: nextMonth,
     notes: '',
+    type: 'PROJECT',
+    billingPeriodFrom: '',
+    billingPeriodTo: '',
+    recurringServiceId: '',
   });
 
   const [paymentForm, setPaymentForm] = useState({
@@ -186,6 +190,19 @@ export function FinanceWorkspacePage() {
           discount: Number(docForm.discount),
           notes: docForm.notes,
           items: itemPayload,
+          type: docForm.type,
+          billingPeriodFrom:
+            docForm.type === 'RECURRING' && docForm.billingPeriodFrom
+              ? docForm.billingPeriodFrom
+              : undefined,
+          billingPeriodTo:
+            docForm.type === 'RECURRING' && docForm.billingPeriodTo
+              ? docForm.billingPeriodTo
+              : undefined,
+          recurringServiceId:
+            docForm.type === 'RECURRING' && docForm.recurringServiceId
+              ? docForm.recurringServiceId
+              : undefined,
         });
       }
       notify({
@@ -513,25 +530,91 @@ function DashboardPanel({
   invoices: Invoice[];
 }) {
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card>
-        <h2 className="text-base font-bold">Open Pipeline</h2>
-        <p className="mt-3 text-sm text-foreground/60">
-          {summary?.draftQuotes ?? 0} draft quotations and {summary?.openInvoices ?? 0} open
-          invoices need attention.
-        </p>
-      </Card>
-      <Card>
-        <h2 className="text-base font-bold">Recent Documents</h2>
-        <div className="mt-3 grid gap-2 text-sm">
-          {[...quotations.slice(0, 3), ...invoices.slice(0, 3)].slice(0, 5).map((item: any) => (
-            <div key={item.id} className="flex justify-between border-b border-border pb-2">
-              <span>{item.quoteNumber ?? item.invoiceNumber}</span>
-              <span>{money(item.total, item.currency ?? 'USD')}</span>
+    <div className="grid gap-4 flex-col">
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <h2 className="text-base font-bold">Open Pipeline</h2>
+          <p className="mt-3 text-sm text-foreground/60">
+            {summary?.draftQuotes ?? 0} draft quotations and {summary?.openInvoices ?? 0} open
+            invoices need attention.
+          </p>
+        </Card>
+        <Card>
+          <h2 className="text-base font-bold">Recent Documents</h2>
+          <div className="mt-3 grid gap-2 text-sm">
+            {[...quotations.slice(0, 3), ...invoices.slice(0, 3)].slice(0, 5).map((item: any) => (
+              <div
+                key={item.id}
+                className="flex justify-between border-b border-border pb-2 animate-fade-in"
+              >
+                <span className="font-semibold flex items-center gap-1.5">
+                  {item.quoteNumber ?? item.invoiceNumber}
+                  {item.type && item.type !== 'PROJECT' && (
+                    <span className="text-[8px] px-1.5 py-0.5 rounded border bg-muted font-bold tracking-wider">
+                      {item.type}
+                    </span>
+                  )}
+                </span>
+                <span>{money(item.total, item.currency ?? 'USD')}</span>
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      {summary?.mrr !== undefined && (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 mt-2">
+          <Card className="p-5 flex items-center justify-between border border-border shadow-xs">
+            <div>
+              <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                Monthly Recurring Revenue (MRR)
+              </span>
+              <p className="text-2xl font-bold mt-2 text-primary">
+                {money(Number(summary.mrr || 0))}
+              </p>
+              <span className="text-[10px] text-foreground/50 mt-1 block font-medium">
+                ARR Target: {money(Number(summary.arr || 0))} / yr
+              </span>
             </div>
-          ))}
+            <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center text-primary font-bold text-xs">
+              MRR
+            </div>
+          </Card>
+          <Card className="p-5 flex items-center justify-between border border-border shadow-xs">
+            <div>
+              <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                Active Retainer Contracts
+              </span>
+              <p className="text-2xl font-bold mt-2 text-emerald-600">
+                {summary.activeContracts || 0} active
+              </p>
+              <span className="text-[10px] text-foreground/50 mt-1 block font-medium">
+                Paused: {summary.pausedContracts || 0} · Cancelled:{' '}
+                {summary.cancelledContracts || 0}
+              </span>
+            </div>
+            <div className="h-10 w-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-600 font-bold text-xs">
+              AMC
+            </div>
+          </Card>
+          <Card className="p-5 flex items-center justify-between border border-border shadow-xs">
+            <div>
+              <span className="block text-[10px] font-bold uppercase text-foreground/45">
+                Billing Target Forecast
+              </span>
+              <p className="text-2xl font-bold mt-2 text-indigo-600">
+                {money(Number(summary.revenueForecast || 0))}
+              </p>
+              <span className="text-[10px] text-foreground/50 mt-1 block font-medium">
+                Realized Retainer Income: {money(Number(summary.recurringRevenue || 0))}
+              </span>
+            </div>
+            <div className="h-10 w-10 bg-indigo-500/10 rounded-xl flex items-center justify-center text-indigo-600 font-bold text-xs">
+              FC
+            </div>
+          </Card>
         </div>
-      </Card>
+      )}
     </div>
   );
 }
@@ -728,93 +811,171 @@ function InvoiceTable({
   onPayment: (invoice: Invoice) => void;
   onEdit: (id: string) => void;
 }) {
+  const [filter, setFilter] = useState<string>('ALL');
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((inv) => {
+      if (filter === 'ALL') return true;
+      if (filter === 'PROJECT') return inv.type === 'PROJECT';
+      if (filter === 'ADVANCE') return inv.type === 'ADVANCE';
+      if (filter === 'MILESTONE') return inv.type === 'MILESTONE';
+      if (filter === 'RECURRING') return inv.type === 'RECURRING';
+      if (filter === 'PAID') return inv.status === 'PAID';
+      if (filter === 'OVERDUE') return inv.status === 'OVERDUE';
+      if (filter === 'DRAFT') return inv.status === 'DRAFT';
+      return true;
+    });
+  }, [invoices, filter]);
+
   return (
-    <Card className="overflow-x-auto p-0 border border-border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border text-left bg-muted/20">
-            <th className="p-4 text-xs font-bold text-foreground/50 uppercase">Invoice Number</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Client</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Status</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Total</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Balance Due</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Due Date</th>
-            <th className="text-xs font-bold text-foreground/50 uppercase">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoices.length === 0 ? (
-            <tr>
-              <td colSpan={7} className="text-center p-8 text-foreground/50">
-                No invoices generated.
-              </td>
+    <div className="grid gap-3">
+      {/* Type & Status filter controls */}
+      <div className="flex flex-wrap gap-1.5 p-3 border border-border rounded-xl bg-muted/10 items-center justify-between">
+        <div className="flex flex-wrap gap-1">
+          {[
+            { id: 'ALL', label: 'All' },
+            { id: 'PROJECT', label: 'Project' },
+            { id: 'ADVANCE', label: 'Advance' },
+            { id: 'MILESTONE', label: 'Milestone' },
+            { id: 'RECURRING', label: 'Recurring' },
+            { id: 'PAID', label: 'Paid' },
+            { id: 'OVERDUE', label: 'Overdue' },
+            { id: 'DRAFT', label: 'Draft' },
+          ].map((item) => (
+            <Button
+              key={item.id}
+              variant={filter === item.id ? 'primary' : 'ghost'}
+              className="h-8 text-xs font-bold px-3 py-1"
+              onClick={() => setFilter(item.id)}
+            >
+              {item.label}
+            </Button>
+          ))}
+        </div>
+        <span className="text-xs text-foreground/50 font-bold px-2">
+          {filteredInvoices.length} invoices found
+        </span>
+      </div>
+
+      <Card className="overflow-x-auto p-0 border border-border">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-border text-left bg-muted/20">
+              <th className="p-4 text-xs font-bold text-foreground/50 uppercase">Invoice Number</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Client</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Status</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Total</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Balance Due</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Due Date</th>
+              <th className="text-xs font-bold text-foreground/50 uppercase">Actions</th>
             </tr>
-          ) : (
-            invoices.map((i) => (
-              <tr key={i.id} className="border-b border-border hover:bg-muted/5 transition">
-                <td className="p-4 font-bold text-foreground">
-                  {i.invoiceNumber}
-                  {i.project && (
-                    <span className="text-[10px] text-foreground/50 block font-normal mt-0.5">
-                      Project: {i.project.projectName}
-                    </span>
-                  )}
-                </td>
-                <td className="text-foreground/80">{i.client?.companyName}</td>
-                <td>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      i.status === 'PAID'
-                        ? 'bg-emerald-500/10 text-emerald-600'
-                        : i.status === 'PARTIALLY_PAID'
-                          ? 'bg-indigo-500/10 text-indigo-600'
-                          : 'bg-amber-500/10 text-amber-600'
-                    }`}
-                  >
-                    {i.status}
-                  </span>
-                </td>
-                <td className="font-bold text-foreground">{money(i.total, i.currency)}</td>
-                <td className="font-bold text-danger">{money(i.balanceDue, i.currency)}</td>
-                <td className="text-foreground/60">{new Date(i.dueDate).toLocaleDateString()}</td>
-                <td className="flex items-center gap-2 py-3">
-                  <Button
-                    className="h-8 w-8 p-0"
-                    variant="ghost"
-                    onClick={() => onEdit(i.id)}
-                    title="Edit invoice"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <a
-                    href={`${api.defaults.baseURL}/invoices/${i.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
-                    title="Download PDF"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </a>
-                  <Button
-                    className="h-8 w-8 p-0"
-                    variant="ghost"
-                    onClick={() => onSend(i.id)}
-                    title="Send invoice email"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </Button>
-                  {i.balanceDue > 0 && (
-                    <Button className="h-8 px-3 text-xs font-bold" onClick={() => onPayment(i)}>
-                      Record Payment
-                    </Button>
-                  )}
+          </thead>
+          <tbody>
+            {filteredInvoices.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="text-center p-8 text-foreground/50">
+                  No invoices match the selected filter.
                 </td>
               </tr>
-            ))
-          )}
-        </tbody>
-      </table>
-    </Card>
+            ) : (
+              filteredInvoices.map((i) => (
+                <tr
+                  key={i.id}
+                  className="border-b border-border hover:bg-muted/5 transition animate-fade-in"
+                >
+                  <td className="p-4 font-bold text-foreground">
+                    <span className="flex items-center gap-1.5">
+                      {i.invoiceNumber}
+                      {i.type && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[8px] font-bold border tracking-wide uppercase ${
+                            i.type === 'RECURRING'
+                              ? 'bg-purple-500/10 text-purple-600 border-purple-500/20'
+                              : i.type === 'ADVANCE'
+                                ? 'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                                : i.type === 'MILESTONE'
+                                  ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
+                                  : i.type === 'FINAL'
+                                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                                    : 'bg-slate-500/10 text-slate-600 border-slate-500/20'
+                          }`}
+                        >
+                          {i.type.replace('_', ' ')}
+                        </span>
+                      )}
+                    </span>
+                    {i.project && (
+                      <span className="text-[10px] text-foreground/50 block font-normal mt-0.5">
+                        Project: {i.project.projectName}
+                      </span>
+                    )}
+                    {i.type === 'RECURRING' && i.billingPeriodFrom && i.billingPeriodTo && (
+                      <span className="text-[9px] text-foreground/55 font-medium block mt-0.5">
+                        Period: {new Date(i.billingPeriodFrom).toLocaleDateString()} –{' '}
+                        {new Date(i.billingPeriodTo).toLocaleDateString()}
+                      </span>
+                    )}
+                  </td>
+                  <td className="text-foreground/80">{i.client?.companyName}</td>
+                  <td>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        i.status === 'PAID'
+                          ? 'bg-emerald-500/10 text-emerald-600'
+                          : i.status === 'PARTIALLY_PAID'
+                            ? 'bg-indigo-500/10 text-indigo-600'
+                            : i.status === 'SENT'
+                              ? 'bg-blue-500/10 text-blue-600'
+                              : i.status === 'OVERDUE'
+                                ? 'bg-rose-500/10 text-rose-600'
+                                : 'bg-amber-500/10 text-amber-600'
+                      }`}
+                    >
+                      {i.status}
+                    </span>
+                  </td>
+                  <td className="font-bold text-foreground">{money(i.total, i.currency)}</td>
+                  <td className="font-bold text-danger">{money(i.balanceDue, i.currency)}</td>
+                  <td className="text-foreground/60">{new Date(i.dueDate).toLocaleDateString()}</td>
+                  <td className="flex items-center gap-2 py-3">
+                    <Button
+                      className="h-8 w-8 p-0"
+                      variant="ghost"
+                      onClick={() => onEdit(i.id)}
+                      title="Edit invoice"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <a
+                      href={`${api.defaults.baseURL}/invoices/${i.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
+                      title="Download PDF"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                    <Button
+                      className="h-8 w-8 p-0"
+                      variant="ghost"
+                      onClick={() => onSend(i.id)}
+                      title="Send invoice email"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                    {i.balanceDue > 0 && (
+                      <Button className="h-8 px-3 text-xs font-bold" onClick={() => onPayment(i)}>
+                        Record Payment
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </Card>
+    </div>
   );
 }
 
@@ -1100,6 +1261,9 @@ function DocumentForm({
   projects: Project[];
   kind: DocKind;
 }) {
+  const selectedProj = projects.find((p) => p.id === form.projectId);
+  const recurringOptions = (selectedProj as any)?.recurringServices || [];
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       <Select
@@ -1114,6 +1278,29 @@ function DocumentForm({
         onChange={(value) => setForm((f: any) => ({ ...f, projectId: value }))}
         options={[['', 'No project'], ...projects.map((p) => [p.id, p.projectName])]}
       />
+      {kind === 'invoice' && (
+        <Select
+          label="Invoice Type"
+          value={form.type}
+          onChange={(value) => setForm((f: any) => ({ ...f, type: value }))}
+          options={[
+            ['PROJECT', 'Project Invoice'],
+            ['ADVANCE', 'Advance Invoice'],
+            ['MILESTONE', 'Milestone Invoice'],
+            ['FINAL', 'Final Invoice'],
+            ['RECURRING', 'Recurring Invoice (AMC)'],
+            ['CREDIT_NOTE', 'Credit Note'],
+          ]}
+        />
+      )}
+      {kind === 'invoice' && form.type === 'RECURRING' && recurringOptions.length > 0 && (
+        <Select
+          label="Linked AMC Contract"
+          value={form.recurringServiceId}
+          onChange={(value) => setForm((f: any) => ({ ...f, recurringServiceId: value }))}
+          options={recurringOptions.map((s: any) => [s.id, s.name])}
+        />
+      )}
       <Field
         label={kind === 'quotation' ? 'Title' : 'Line Item'}
         value={kind === 'quotation' ? form.title : form.itemName}
@@ -1153,6 +1340,22 @@ function DocumentForm({
           setForm((f: any) => ({ ...f, [kind === 'quotation' ? 'validUntil' : 'dueDate']: value }))
         }
       />
+      {kind === 'invoice' && form.type === 'RECURRING' && (
+        <>
+          <Field
+            label="Billing Period From"
+            type="date"
+            value={form.billingPeriodFrom}
+            onChange={(value) => setForm((f: any) => ({ ...f, billingPeriodFrom: value }))}
+          />
+          <Field
+            label="Billing Period To"
+            type="date"
+            value={form.billingPeriodTo}
+            onChange={(value) => setForm((f: any) => ({ ...f, billingPeriodTo: value }))}
+          />
+        </>
+      )}
     </div>
   );
 }

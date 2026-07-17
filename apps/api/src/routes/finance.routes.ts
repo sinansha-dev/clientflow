@@ -71,6 +71,10 @@ const invoiceSchema = z.object({
   paymentMethod: z.string().optional().nullable(),
   paymentInstructions: z.string().optional().nullable(),
   items: z.array(itemSchema).min(1),
+  type: z.enum(['PROJECT', 'ADVANCE', 'MILESTONE', 'FINAL', 'RECURRING', 'CREDIT_NOTE']).optional(),
+  billingPeriodFrom: z.string().optional().nullable(),
+  billingPeriodTo: z.string().optional().nullable(),
+  recurringServiceId: uuidSchema.optional().nullable().or(z.literal('')),
 });
 const paymentSchema = z.object({
   invoiceId: uuidSchema,

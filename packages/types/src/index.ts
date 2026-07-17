@@ -420,6 +420,9 @@ export interface InvoiceAttachment {
   type: string;
 }
 
+export type InvoiceType =
+  'PROJECT' | 'ADVANCE' | 'MILESTONE' | 'FINAL' | 'RECURRING' | 'CREDIT_NOTE';
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -454,6 +457,11 @@ export interface Invoice {
   payments?: Payment[];
   billingStageId?: string | null;
   billingStage?: BillingStage | null;
+  type: InvoiceType;
+  billingPeriodFrom?: string | Date | null;
+  billingPeriodTo?: string | Date | null;
+  recurringServiceId?: string | null;
+  recurringService?: RecurringService | null;
 }
 
 export interface Payment {
@@ -496,6 +504,13 @@ export interface FinanceSummary {
   profit: number;
   draftQuotes: number;
   openInvoices: number;
+  mrr?: number;
+  arr?: number;
+  activeContracts?: number;
+  pausedContracts?: number;
+  cancelledContracts?: number;
+  revenueForecast?: number;
+  recurringRevenue?: number;
 }
 
 export type BillingPlanType =

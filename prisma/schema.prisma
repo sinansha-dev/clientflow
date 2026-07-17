@@ -803,6 +803,11 @@ model Invoice {
   payments            Payment[]
   billingStageId      String?       @unique @db.Uuid
   billingStage        BillingStage? @relation(fields: [billingStageId], references: [id], onDelete: SetNull)
+  type                InvoiceType   @default(PROJECT)
+  billingPeriodFrom   DateTime?
+  billingPeriodTo     DateTime?
+  recurringServiceId  String?       @db.Uuid
+  recurringService    RecurringService? @relation(fields: [recurringServiceId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
   @@index([projectId])
@@ -867,6 +872,15 @@ model Expense {
   @@index([deletedAt])
 }
 
+enum InvoiceType {
+  PROJECT
+  ADVANCE
+  MILESTONE
+  FINAL
+  RECURRING
+  CREDIT_NOTE
+}
+
 enum BillingPlanType {
   FULL_PAYMENT
   ADVANCE_BALANCE
@@ -928,6 +942,7 @@ model RecurringService {
   lastInvoicedDate DateTime?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+  invoices         Invoice[]
 
   @@index([projectId])
 }
