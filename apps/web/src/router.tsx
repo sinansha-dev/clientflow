@@ -22,6 +22,8 @@ import { TimesheetWorkspacePage } from './pages/timesheets/timesheet-workspace';
 import { CalendarWorkspacePage } from './pages/calendar/calendar-workspace';
 import { ReportsWorkspacePage } from './pages/reports/reports-workspace';
 import { FinanceWorkspacePage } from './pages/finance/finance-workspace';
+import { QuotationEditorPage } from './pages/finance/quotation-editor';
+import { InvoiceEditorPage } from './pages/finance/invoice-editor';
 import { ClientPortalPage } from './pages/portal/client-portal';
 
 const staffOnly = ['ADMIN', 'STAFF'] as const;
@@ -129,6 +131,38 @@ export const router = createBrowserRouter([
         element: (
           <ProtectedRoute roles={['ADMIN']}>
             <FinanceWorkspacePage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/invoices/quotations/new',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <QuotationEditorPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/invoices/quotations/:id/edit',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <QuotationEditorPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/invoices/new',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <InvoiceEditorPage />
+          </ProtectedRoute>
+        ),
+      },
+      {
+        path: '/invoices/:id/edit',
+        element: (
+          <ProtectedRoute roles={['ADMIN']}>
+            <InvoiceEditorPage />
           </ProtectedRoute>
         ),
       },

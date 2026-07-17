@@ -576,7 +576,15 @@ export function ClientPortalPage() {
                               {quote.status}
                             </span>
                           </td>
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 flex items-center gap-3">
+                            <a
+                              href={`${api.defaults.baseURL}/quotations/${quote.id}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline font-bold text-xs inline-flex items-center gap-1"
+                            >
+                              <Download className="h-3 w-3" /> Download
+                            </a>
                             {quote.status !== 'ACCEPTED' && (
                               <Button
                                 onClick={async () => {

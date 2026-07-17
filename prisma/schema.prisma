@@ -719,27 +719,34 @@ model FileDownload {
 }
 
 model Quotation {
-  id          String          @id @default(uuid()) @db.Uuid
-  quoteNumber String          @unique
-  clientId    String          @db.Uuid
-  client      Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectId   String?         @db.Uuid
-  project     Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  title       String
-  description String?         @db.Text
-  validUntil  DateTime
-  status      String          @default("DRAFT")
-  subtotal    Float           @default(0)
-  tax         Float           @default(0)
-  discount    Float           @default(0)
-  total       Float           @default(0)
-  notes       String?         @db.Text
-  createdBy   String          @db.Uuid
-  creator     User            @relation("QuotationCreator", fields: [createdBy], references: [id])
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-  deletedAt   DateTime?
-  items       QuotationItem[]
+  id                String          @id @default(uuid()) @db.Uuid
+  quoteNumber       String          @unique
+  clientId          String          @db.Uuid
+  client            Client          @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId         String?         @db.Uuid
+  project           Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?         @db.Text
+  quoteDate         DateTime        @default(now())
+  validUntil        DateTime
+  currency          String          @default("USD")
+  status            String          @default("DRAFT")
+  subtotal          Float           @default(0)
+  tax               Float           @default(0)
+  discount          Float           @default(0)
+  total             Float           @default(0)
+  notes             String?         @db.Text
+  scope             String?         @db.Text
+  termsConditions   String?         @db.Text
+  internalNotes     String?         @db.Text
+  billingPlanDraft  Json?
+  attachments       Json?
+  createdBy         String          @db.Uuid
+  creator           User            @relation("QuotationCreator", fields: [createdBy], references: [id])
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  deletedAt         DateTime?
+  items             QuotationItem[]
 
   @@index([clientId])
   @@index([projectId])
@@ -763,32 +770,39 @@ model QuotationItem {
 }
 
 model Invoice {
-  id             String        @id @default(uuid()) @db.Uuid
-  invoiceNumber  String        @unique
-  clientId       String        @db.Uuid
-  client         Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  projectId      String?       @db.Uuid
-  project        Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  issueDate      DateTime
-  dueDate        DateTime
-  status         String        @default("DRAFT")
-  currency       String        @default("USD")
-  subtotal       Float         @default(0)
-  tax            Float         @default(0)
-  discount       Float         @default(0)
-  total          Float         @default(0)
-  amountPaid     Float         @default(0)
-  balanceDue     Float         @default(0)
-  notes          String?       @db.Text
-  createdBy      String        @db.Uuid
-  creator        User          @relation("InvoiceCreator", fields: [createdBy], references: [id])
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
-  deletedAt      DateTime?
-  items          InvoiceItem[]
-  payments       Payment[]
-  billingStageId String?       @unique @db.Uuid
-  billingStage   BillingStage? @relation(fields: [billingStageId], references: [id], onDelete: SetNull)
+  id                  String        @id @default(uuid()) @db.Uuid
+  invoiceNumber       String        @unique
+  clientId            String        @db.Uuid
+  client              Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  projectId           String?       @db.Uuid
+  project             Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  title               String        @default("Invoice")
+  scope               String?       @db.Text
+  issueDate           DateTime
+  dueDate             DateTime
+  status              String        @default("DRAFT")
+  currency            String        @default("USD")
+  subtotal            Float         @default(0)
+  tax                 Float         @default(0)
+  discount            Float         @default(0)
+  total               Float         @default(0)
+  amountPaid          Float         @default(0)
+  balanceDue          Float         @default(0)
+  notes               String?       @db.Text
+  termsConditions     String?       @db.Text
+  internalNotes       String?       @db.Text
+  attachments         Json?
+  paymentMethod       String?
+  paymentInstructions String?       @db.Text
+  createdBy           String        @db.Uuid
+  creator             User          @relation("InvoiceCreator", fields: [createdBy], references: [id])
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+  deletedAt           DateTime?
+  items               InvoiceItem[]
+  payments            Payment[]
+  billingStageId      String?       @unique @db.Uuid
+  billingStage        BillingStage? @relation(fields: [billingStageId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
   @@index([projectId])

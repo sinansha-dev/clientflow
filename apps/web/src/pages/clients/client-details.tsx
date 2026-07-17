@@ -31,10 +31,19 @@ import {
   RotateCcw,
   TrendingUp,
   Award,
+  Download,
 } from 'lucide-react';
 
 type TabType =
-  'overview' | 'contacts' | 'projects' | 'invoices' | 'files' | 'notes' | 'activity' | 'timelogs';
+  | 'overview'
+  | 'contacts'
+  | 'projects'
+  | 'quotes'
+  | 'invoices'
+  | 'files'
+  | 'notes'
+  | 'activity'
+  | 'timelogs';
 
 export function ClientDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -453,6 +462,7 @@ export function ClientDetailsPage() {
             { id: 'overview', label: 'Overview', icon: Building, visible: true },
             { id: 'contacts', label: 'Contacts', icon: Users, visible: true },
             { id: 'projects', label: 'Projects', icon: FolderKanban, visible: true },
+            { id: 'quotes', label: 'Quotations', icon: FileText, visible: canSeeBilling },
             { id: 'invoices', label: 'Billing', icon: FileText, visible: canSeeBilling },
             { id: 'files', label: 'Files', icon: Upload, visible: true },
             { id: 'notes', label: 'Notes', icon: MessageSquare, visible: true },
@@ -1221,6 +1231,104 @@ export function ClientDetailsPage() {
                 </div>
               </Card>
             </div>
+          </div>
+        )}
+
+        {/* --- TAB CONTENT: QUOTATIONS --- */}
+        {activeTab === 'quotes' && (
+          <div className="grid gap-6 animate-fade-in">
+            {/* Summary cards */}
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Card className="p-5 border border-border bg-card">
+                <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                  Total Quotations Value
+                </span>
+                <span className="text-xl font-bold mt-2 block text-primary">
+                  {client?.currency || 'USD'}{' '}
+                  {(client?.quotations?.reduce((sum, q) => sum + q.total, 0) || 0).toLocaleString()}
+                </span>
+              </Card>
+              <Card className="p-5 border border-border bg-card">
+                <span className="text-[10px] uppercase font-bold text-foreground/45 block">
+                  Accepted Quotations
+                </span>
+                <span className="text-xl font-bold mt-2 block text-emerald-600">
+                  {client?.quotations?.filter((q) => q.status === 'ACCEPTED').length || 0} /{' '}
+                  {client?.quotations?.length || 0}
+                </span>
+              </Card>
+            </div>
+
+            {/* Quotations List table */}
+            <Card className="p-0 overflow-hidden border border-border">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30 font-semibold text-foreground/80">
+                      <th className="px-6 py-4">Quote Number</th>
+                      <th className="px-6 py-4">Title</th>
+                      <th className="px-6 py-4">Amount</th>
+                      <th className="px-6 py-4">Valid Until</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">PDF</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {client?.quotations?.length ? (
+                      client.quotations.map((q) => (
+                        <tr key={q.id} className="hover:bg-muted/5 transition font-normal">
+                          <td className="px-6 py-4 font-bold">{q.quoteNumber}</td>
+                          <td className="px-6 py-4">
+                            <div>{q.title}</div>
+                            {q.project && (
+                              <span className="text-xs text-foreground/50">
+                                Project: {q.project.projectName}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 font-semibold">
+                            {client.currency || 'USD'} {q.total.toLocaleString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            {new Date(q.validUntil).toLocaleDateString()}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                q.status === 'ACCEPTED'
+                                  ? 'bg-emerald-500/10 text-emerald-600'
+                                  : 'bg-amber-500/10 text-amber-600'
+                              }`}
+                            >
+                              {q.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <a
+                              href={`${api.defaults.baseURL}/quotations/${q.id}/pdf`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-primary hover:underline font-bold text-xs inline-flex items-center gap-1"
+                            >
+                              <Download className="h-3 w-3" /> Download
+                            </a>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="px-6 py-12 text-center text-foreground/45 italic"
+                        >
+                          No quotations created for this client.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
           </div>
         )}
 

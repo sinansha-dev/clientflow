@@ -357,6 +357,20 @@ export interface QuotationItem {
   createdAt: string | Date;
 }
 
+export interface QuotationBillingDraft {
+  billingType: BillingPlanType;
+  stages: { name: string; percentage: number; amount: number; dueDate?: string | null }[];
+  monthlyAmount?: number | null;
+  retainerStart?: string | null;
+  retainerDuration?: number | null; // months
+}
+
+export interface QuotationAttachment {
+  name: string;
+  url: string;
+  type: string; // 'PDF', 'DOC', 'MOCKUP', 'CONTRACT', 'OTHER'
+}
+
 export interface Quotation {
   id: string;
   quoteNumber: string;
@@ -366,13 +380,20 @@ export interface Quotation {
   project?: Project | null;
   title: string;
   description?: string | null;
+  quoteDate?: string | Date;
   validUntil: string | Date;
+  currency?: string;
   status: string;
   subtotal: number;
   tax: number;
   discount: number;
   total: number;
   notes?: string | null;
+  scope?: string | null;
+  termsConditions?: string | null;
+  internalNotes?: string | null;
+  billingPlanDraft?: QuotationBillingDraft | null;
+  attachments?: QuotationAttachment[];
   createdBy: string;
   creator?: AuthUser;
   createdAt: string | Date;
@@ -393,6 +414,12 @@ export interface InvoiceItem {
   createdAt: string | Date;
 }
 
+export interface InvoiceAttachment {
+  name: string;
+  url: string;
+  type: string;
+}
+
 export interface Invoice {
   id: string;
   invoiceNumber: string;
@@ -400,6 +427,8 @@ export interface Invoice {
   client?: Client;
   projectId?: string | null;
   project?: Project | null;
+  title?: string;
+  scope?: string | null;
   issueDate: string | Date;
   dueDate: string | Date;
   status: string;
@@ -411,6 +440,11 @@ export interface Invoice {
   amountPaid: number;
   balanceDue: number;
   notes?: string | null;
+  termsConditions?: string | null;
+  internalNotes?: string | null;
+  attachments?: InvoiceAttachment[] | null;
+  paymentMethod?: string | null;
+  paymentInstructions?: string | null;
   createdBy: string;
   creator?: AuthUser;
   createdAt: string | Date;

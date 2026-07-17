@@ -1,8 +1,11 @@
 import type { Request, Response } from 'express';
+import PDFDocument from 'pdfkit';
 import { financeRepository } from '../repositories/finance.repository';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
+import { generateQuotationPdf } from '../utils/quotation-pdf';
+import { generateInvoicePdf } from '../utils/invoice-pdf';
 
 export const financeController = {
   async listQuotations(req: Request, res: Response) {
@@ -89,16 +92,24 @@ export const financeController = {
 
   async invoicePdf(req: Request, res: Response) {
     const invoices = await financeRepository.listInvoices(req.user!, {});
-    const invoice = invoices.find((item) => item.id === req.params.id);
+    const invoice = invoices.find((item) => item.id === req.params.id) as any;
     if (!invoice) throw notFound('Invoice not found');
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${invoice.invoiceNumber}.pdf"`);
-    return res.send(
-      Buffer.from(
-        `ClientFlow Invoice\n${invoice.invoiceNumber}\nTotal: ${invoice.currency} ${invoice.total}\nBalance Due: ${invoice.currency} ${invoice.balanceDue}\n`,
-        'utf8',
-      ),
-    );
+    res.setHeader('Content-Disposition', `inline; filename="${invoice.invoiceNumber}.pdf"`);
+
+    await generateInvoicePdf(invoice, res);
+  },
+
+  async quotationPdf(req: Request, res: Response) {
+    const quotations = await financeRepository.listQuotations(req.user!, {});
+    const q = quotations.find((item) => item.id === req.params.id) as any;
+    if (!q) throw notFound('Quotation not found');
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${q.quoteNumber}.pdf"`);
+
+    await generateQuotationPdf(q, res);
   },
 
   async listPayments(req: Request, res: Response) {

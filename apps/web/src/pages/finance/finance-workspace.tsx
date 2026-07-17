@@ -23,10 +23,11 @@ import {
   RefreshCcw,
   Send,
   WalletCards,
-  Calendar,
   Layers,
   FileSpreadsheet,
   Zap,
+  Download,
+  Pencil,
 } from 'lucide-react';
 
 type Tab =
@@ -308,10 +309,10 @@ export function FinanceWorkspacePage() {
           >
             <RefreshCcw className="h-4 w-4" /> Refresh
           </Button>
-          <Button onClick={() => setOpenForm('quotation')}>
+          <Button onClick={() => navigate('/invoices/quotations/new')}>
             <Plus className="h-4 w-4" /> Quotation
           </Button>
-          <Button onClick={() => setOpenForm('invoice')}>
+          <Button onClick={() => navigate('/invoices/new')}>
             <Plus className="h-4 w-4" /> Invoice
           </Button>
           <Button
@@ -388,9 +389,10 @@ export function FinanceWorkspacePage() {
               onConvert={(id) =>
                 action(
                   `/quotations/${id}/convert-project`,
-                  'Quotation converted to project. Initialized custom billing plan.',
+                  'Quotation converted to project. Billing plan auto-activated.',
                 )
               }
+              onEdit={(id) => navigate(`/invoices/quotations/${id}/edit`)}
             />
           )}
 
@@ -413,6 +415,7 @@ export function FinanceWorkspacePage() {
                 }));
                 setOpenForm('payment');
               }}
+              onEdit={(id) => navigate(`/invoices/${id}/edit`)}
             />
           )}
 
@@ -434,24 +437,21 @@ export function FinanceWorkspacePage() {
         </>
       )}
 
-      {/* Forms Modals */}
-      {openForm === 'quotation' || openForm === 'invoice' ? (
-        <Modal
-          title={openForm === 'quotation' ? 'New Quotation' : 'New Invoice'}
-          onClose={() => setOpenForm(null)}
-        >
+      {/* Invoice Form Modal (Quotation creation moved to dedicated page) */}
+      {openForm === 'invoice' ? (
+        <Modal title="New Invoice" onClose={() => setOpenForm(null)}>
           <DocumentForm
             form={docForm}
             setForm={setDocForm}
             clients={clients}
             projects={projectOptions}
-            kind={openForm}
+            kind="invoice"
           />
           <div className="mt-5 flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpenForm(null)}>
               Cancel
             </Button>
-            <Button onClick={() => createDocument(openForm)}>Save</Button>
+            <Button onClick={() => createDocument('invoice')}>Save</Button>
           </div>
         </Modal>
       ) : null}
@@ -541,11 +541,13 @@ function QuotationTable({
   onSend,
   onApprove,
   onConvert,
+  onEdit,
 }: {
   quotations: Quotation[];
   onSend: (id: string) => void;
   onApprove: (id: string) => void;
   onConvert: (id: string) => void;
+  onEdit: (id: string) => void;
 }) {
   return (
     <Card className="overflow-x-auto p-0 border border-border">
@@ -580,7 +582,11 @@ function QuotationTable({
                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${
                       q.status === 'ACCEPTED'
                         ? 'bg-emerald-500/10 text-emerald-600'
-                        : 'bg-amber-500/10 text-amber-600'
+                        : q.status === 'SENT'
+                          ? 'bg-blue-500/10 text-blue-600'
+                          : q.status === 'REJECTED'
+                            ? 'bg-danger/10 text-danger'
+                            : 'bg-amber-500/10 text-amber-600'
                     }`}
                   >
                     {q.status}
@@ -591,6 +597,23 @@ function QuotationTable({
                   {new Date(q.validUntil).toLocaleDateString()}
                 </td>
                 <td className="flex items-center gap-2 py-3">
+                  <Button
+                    className="h-8 w-8 p-0"
+                    variant="ghost"
+                    onClick={() => onEdit(q.id)}
+                    title="Edit quotation"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <a
+                    href={`${api.defaults.baseURL}/quotations/${q.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
+                    title="Download PDF"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
                   <Button
                     className="h-8 w-8 p-0"
                     variant="ghost"
@@ -612,6 +635,7 @@ function QuotationTable({
                       <Button
                         className="h-8 px-3 text-xs font-bold"
                         onClick={() => onConvert(q.id)}
+                        title="Setup project and activate billing plan"
                       >
                         Setup Project
                       </Button>
@@ -697,10 +721,12 @@ function InvoiceTable({
   invoices,
   onSend,
   onPayment,
+  onEdit,
 }: {
   invoices: Invoice[];
   onSend: (id: string) => void;
   onPayment: (invoice: Invoice) => void;
+  onEdit: (id: string) => void;
 }) {
   return (
     <Card className="overflow-x-auto p-0 border border-border">
@@ -752,6 +778,23 @@ function InvoiceTable({
                 <td className="font-bold text-danger">{money(i.balanceDue, i.currency)}</td>
                 <td className="text-foreground/60">{new Date(i.dueDate).toLocaleDateString()}</td>
                 <td className="flex items-center gap-2 py-3">
+                  <Button
+                    className="h-8 w-8 p-0"
+                    variant="ghost"
+                    onClick={() => onEdit(i.id)}
+                    title="Edit invoice"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <a
+                    href={`${api.defaults.baseURL}/invoices/${i.id}/pdf`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
+                    title="Download PDF"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                  </a>
                   <Button
                     className="h-8 w-8 p-0"
                     variant="ghost"

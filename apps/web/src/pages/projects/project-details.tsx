@@ -42,6 +42,7 @@ import {
   Users,
   UserRoundCog,
   Trash2,
+  Download,
 } from 'lucide-react';
 
 type ProjectTab =
@@ -70,6 +71,8 @@ export function ProjectDetailsPage() {
   const [tasksViewMode, setTasksViewMode] = useState<'board' | 'list' | 'calendar' | 'dashboard'>(
     'board',
   );
+  const [initPlanType, setInitPlanType] = useState('CUSTOM');
+  const [milestoneCount, setMilestoneCount] = useState(3);
 
   // Load staff for PM/team assignment editing
   const [staff, setStaff] = useState<AuthUser[]>([]);
@@ -1468,11 +1471,12 @@ export function ProjectDetailsPage() {
                   Setup a billing structure (Milestone, Retainer, Advance + Balance) to track
                   project finances and automatically generate stage invoices.
                 </p>
-                <div className="mt-4 flex justify-center gap-3">
+                <div className="mt-4 flex items-center justify-center gap-3">
                   <select
                     id="billing-plan-select-init"
                     className="h-10 rounded-xl border border-border bg-background px-3 text-sm outline-none"
-                    defaultValue="CUSTOM"
+                    value={initPlanType}
+                    onChange={(e) => setInitPlanType(e.target.value)}
                   >
                     <option value="FULL_PAYMENT">Full Payment (100% upfront)</option>
                     <option value="ADVANCE_BALANCE">Advance + Balance (50% / 50%)</option>
@@ -1481,12 +1485,30 @@ export function ProjectDetailsPage() {
                     <option value="AMC">AMC Support Contract</option>
                     <option value="CUSTOM">Custom Billing Structure</option>
                   </select>
+
+                  {['MILESTONE', 'MONTHLY_RETAINER', 'AMC'].includes(initPlanType) && (
+                    <input
+                      type="number"
+                      min={1}
+                      max={24}
+                      value={milestoneCount}
+                      onChange={(e) =>
+                        setMilestoneCount(Math.max(1, parseInt(e.target.value) || 1))
+                      }
+                      className="h-10 w-24 text-center rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary focus:ring-2 focus:ring-primary/20"
+                      placeholder={initPlanType === 'MILESTONE' ? 'Stages' : 'Months'}
+                      title={
+                        initPlanType === 'MILESTONE'
+                          ? 'Number of Milestone Stages'
+                          : 'Number of Months/Periods'
+                      }
+                      required
+                    />
+                  )}
+
                   <Button
                     onClick={async () => {
-                      const sel = document.getElementById(
-                        'billing-plan-select-init',
-                      ) as HTMLSelectElement;
-                      const type = sel?.value || 'CUSTOM';
+                      const type = initPlanType;
 
                       let stages: any[] = [];
                       if (type === 'FULL_PAYMENT') {
@@ -1496,6 +1518,63 @@ export function ProjectDetailsPage() {
                           { name: 'Advance Booking Payment', amount: project.budget * 0.5 },
                           { name: 'Final Handover Balance', amount: project.budget * 0.5 },
                         ];
+                      } else if (type === 'MILESTONE') {
+                        const count = milestoneCount;
+                        if (isNaN(count) || count <= 0) {
+                          notify({
+                            type: 'error',
+                            title: 'Invalid Count',
+                            message: 'Please enter a valid number of milestones.',
+                          });
+                          return;
+                        }
+                        const amountPerStage = project.budget / count;
+                        stages = Array.from({ length: count }, (_, i) => ({
+                          name: `Milestone Stage ${i + 1}`,
+                          amount: Number(amountPerStage.toFixed(2)),
+                        }));
+                      } else if (type === 'MONTHLY_RETAINER') {
+                        const count = milestoneCount;
+                        if (isNaN(count) || count <= 0) {
+                          notify({
+                            type: 'error',
+                            title: 'Invalid Count',
+                            message: 'Please enter a valid number of months.',
+                          });
+                          return;
+                        }
+                        const amountPerStage = project.budget / count;
+                        const start = project?.startDate ? new Date(project.startDate) : new Date();
+                        stages = Array.from({ length: count }, (_, i) => {
+                          const dueDate = new Date(start);
+                          dueDate.setMonth(start.getMonth() + i);
+                          return {
+                            name: `Month ${i + 1} Retainer`,
+                            amount: Number(amountPerStage.toFixed(2)),
+                            dueDate: dueDate.toISOString(),
+                          };
+                        });
+                      } else if (type === 'AMC') {
+                        const count = milestoneCount;
+                        if (isNaN(count) || count <= 0) {
+                          notify({
+                            type: 'error',
+                            title: 'Invalid Count',
+                            message: 'Please enter a valid number of periods.',
+                          });
+                          return;
+                        }
+                        const amountPerStage = project.budget / count;
+                        const start = project?.startDate ? new Date(project.startDate) : new Date();
+                        stages = Array.from({ length: count }, (_, i) => {
+                          const dueDate = new Date(start);
+                          dueDate.setMonth(start.getMonth() + i);
+                          return {
+                            name: `AMC Support Period ${i + 1}`,
+                            amount: Number(amountPerStage.toFixed(2)),
+                            dueDate: dueDate.toISOString(),
+                          };
+                        });
                       } else {
                         stages = [{ name: 'First Stage Milestone', amount: project.budget }];
                       }
@@ -1692,14 +1771,14 @@ export function ProjectDetailsPage() {
                         Reconfigure Billing Plan
                       </h3>
                       <p className="text-xs text-foreground/60 mt-1">
-                        Changing the plan layout will preserve invoiced stages but remove any
-                        pending draft milestones.
+                        Resetting the billing plan will remove all stages. Existing invoices will be
+                        preserved as ad-hoc invoices, but their link to the stages will be removed.
                       </p>
                     </div>
                     <Button
                       variant="danger"
                       onClick={async () => {
-                        if (!window.confirm('Reset billing plan? Pending stages will be removed.'))
+                        if (!window.confirm('Reset billing plan? All stages will be removed.'))
                           return;
                         try {
                           await api.post(`/billing-plans/${id}`, {
@@ -1740,6 +1819,7 @@ export function ProjectDetailsPage() {
                         <th className="px-6 py-4">Balance</th>
                         <th className="px-6 py-4">Due Date</th>
                         <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4">PDF</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1772,6 +1852,16 @@ export function ProjectDetailsPage() {
                               >
                                 {invoice.status}
                               </span>
+                            </td>
+                            <td className="px-6 py-4">
+                              <a
+                                href={`${api.defaults.baseURL}/invoices/${invoice.id}/pdf`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-primary hover:underline font-bold text-xs inline-flex items-center gap-1"
+                              >
+                                <Download className="h-3 w-3" /> Download
+                              </a>
                             </td>
                           </tr>
                         ))

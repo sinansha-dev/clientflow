@@ -19,21 +19,57 @@ const quotationSchema = z.object({
   projectId: uuidSchema.optional().nullable().or(z.literal('')),
   title: z.string().min(1),
   description: z.string().optional().nullable(),
+  quoteDate: z.string().optional().nullable(),
   validUntil: z.string().min(1),
+  currency: z.string().optional(),
   status: z.string().optional(),
   discount: z.number().min(0).optional(),
   notes: z.string().optional().nullable(),
+  scope: z.string().optional().nullable(),
+  termsConditions: z.string().optional().nullable(),
+  internalNotes: z.string().optional().nullable(),
+  billingPlanDraft: z
+    .object({
+      billingType: z.string(),
+      stages: z.array(
+        z.object({
+          name: z.string(),
+          percentage: z.number(),
+          amount: z.number(),
+          dueDate: z.string().optional().nullable(),
+        }),
+      ),
+      monthlyAmount: z.number().optional().nullable(),
+      retainerStart: z.string().optional().nullable(),
+      retainerDuration: z.number().optional().nullable(),
+    })
+    .optional()
+    .nullable(),
+  attachments: z
+    .array(z.object({ name: z.string(), url: z.string(), type: z.string() }))
+    .optional()
+    .nullable(),
   items: z.array(itemSchema).min(1),
 });
 const invoiceSchema = z.object({
   clientId: uuidSchema,
   projectId: uuidSchema.optional().nullable().or(z.literal('')),
+  title: z.string().optional(),
+  scope: z.string().optional().nullable(),
   issueDate: z.string().min(1),
   dueDate: z.string().min(1),
   status: z.string().optional(),
   currency: z.string().optional(),
   discount: z.number().min(0).optional(),
   notes: z.string().optional().nullable(),
+  termsConditions: z.string().optional().nullable(),
+  internalNotes: z.string().optional().nullable(),
+  attachments: z
+    .array(z.object({ name: z.string(), url: z.string(), type: z.string() }))
+    .optional()
+    .nullable(),
+  paymentMethod: z.string().optional().nullable(),
+  paymentInstructions: z.string().optional().nullable(),
   items: z.array(itemSchema).min(1),
 });
 const paymentSchema = z.object({
@@ -99,6 +135,14 @@ quotationRoutes.post(
   (req, res, next) => financeController.convertQuotationToInvoice(req, res).catch(next),
 );
 
+// Quotation PDF route
+quotationRoutes.get(
+  '/:id/pdf',
+  requireRole('ADMIN', 'CLIENT'),
+  validate(idParams, 'params'),
+  (req, res, next) => financeController.quotationPdf(req, res).catch(next),
+);
+
 export const invoiceRoutes = Router();
 invoiceRoutes.use(requireAuth);
 invoiceRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
@@ -123,7 +167,7 @@ invoiceRoutes.post(
   validate(idParams, 'params'),
   (req, res, next) => financeController.sendInvoice(req, res).catch(next),
 );
-invoiceRoutes.post(
+invoiceRoutes.get(
   '/:id/pdf',
   requireRole('ADMIN', 'CLIENT'),
   validate(idParams, 'params'),

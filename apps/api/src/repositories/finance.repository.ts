@@ -154,13 +154,20 @@ export const financeRepository = {
         projectId: data.projectId || null,
         title: data.title,
         description: data.description || null,
+        quoteDate: data.quoteDate ? new Date(data.quoteDate) : new Date(),
         validUntil: new Date(data.validUntil),
+        currency: data.currency || 'USD',
         status: data.status || 'DRAFT',
         subtotal: calculated.subtotal,
         tax: calculated.tax,
         discount: calculated.discount,
         total: calculated.total,
         notes: data.notes || null,
+        scope: data.scope || null,
+        termsConditions: data.termsConditions || null,
+        internalNotes: data.internalNotes || null,
+        billingPlanDraft: data.billingPlanDraft ?? null,
+        attachments: data.attachments ?? null,
         createdBy: userId,
         items: { create: calculated.items },
       },
@@ -189,6 +196,7 @@ export const financeRepository = {
         where: { id },
         data: {
           ...rest,
+          quoteDate: rest.quoteDate ? new Date(rest.quoteDate) : undefined,
           validUntil: rest.validUntil ? new Date(rest.validUntil) : undefined,
           projectId: rest.projectId === '' ? null : rest.projectId,
           subtotal: calculated?.subtotal,
@@ -283,6 +291,8 @@ export const financeRepository = {
         invoiceNumber: await nextNumber('INV'),
         clientId: data.clientId,
         projectId: data.projectId || null,
+        title: data.title || 'Invoice',
+        scope: data.scope || null,
         issueDate: new Date(data.issueDate),
         dueDate: new Date(data.dueDate),
         status: data.status || 'DRAFT',
@@ -293,6 +303,11 @@ export const financeRepository = {
         total: calculated.total,
         balanceDue: calculated.total,
         notes: data.notes || null,
+        termsConditions: data.termsConditions || null,
+        internalNotes: data.internalNotes || null,
+        attachments: data.attachments ?? null,
+        paymentMethod: data.paymentMethod || null,
+        paymentInstructions: data.paymentInstructions || null,
         createdBy: userId,
         items: { create: calculated.items },
       },
@@ -522,6 +537,13 @@ export const financeRepository = {
   async createOrUpdateBillingPlan(projectId: string, data: any) {
     const { billingType, totalAmount, stages } = data;
 
+    if (!stages || stages.length === 0) {
+      await prisma.billingPlan.deleteMany({
+        where: { projectId },
+      });
+      return null;
+    }
+
     const plan = await prisma.billingPlan.upsert({
       where: { projectId },
       create: {
@@ -541,9 +563,7 @@ export const financeRepository = {
     });
 
     const activeStageIds = stages.map((s: any) => s.id).filter(Boolean);
-    const stagesToDelete = existingStages.filter(
-      (es) => !activeStageIds.includes(es.id) && !es.invoice,
-    );
+    const stagesToDelete = existingStages.filter((es) => !activeStageIds.includes(es.id));
 
     if (stagesToDelete.length > 0) {
       await prisma.billingStage.deleteMany({
@@ -785,6 +805,15 @@ export const financeRepository = {
     const deadline = new Date();
     deadline.setDate(deadline.getDate() + 90);
 
+    // Parse the billing plan draft stored on the quotation
+    const draft = quote.billingPlanDraft as {
+      billingType: string;
+      stages: { name: string; percentage: number; amount: number; dueDate?: string | null }[];
+      monthlyAmount?: number | null;
+      retainerStart?: string | null;
+      retainerDuration?: number | null;
+    } | null;
+
     return prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
         data: {
@@ -805,19 +834,44 @@ export const financeRepository = {
 
       await tx.quotation.update({
         where: { id },
-        data: {
-          projectId: project.id,
-          status: 'ACCEPTED',
-        },
+        data: { projectId: project.id, status: 'ACCEPTED' },
       });
 
-      await tx.billingPlan.create({
+      // Auto-activate billing plan from quotation draft, fallback to CUSTOM
+      const billingType = (draft?.billingType as any) || 'CUSTOM';
+      const billingPlan = await tx.billingPlan.create({
         data: {
           projectId: project.id,
-          billingType: 'CUSTOM',
+          billingType,
           totalAmount: quote.total,
         },
       });
+
+      // Create billing stages from draft
+      if (draft?.stages && draft.stages.length > 0) {
+        for (const stage of draft.stages) {
+          await tx.billingStage.create({
+            data: {
+              billingPlanId: billingPlan.id,
+              name: stage.name,
+              amount: money(stage.amount),
+              dueDate: stage.dueDate ? new Date(stage.dueDate) : null,
+              status: 'PENDING',
+            },
+          });
+        }
+      } else if (draft?.monthlyAmount) {
+        // Monthly retainer / AMC — create first stage
+        await tx.billingStage.create({
+          data: {
+            billingPlanId: billingPlan.id,
+            name: 'Month 1',
+            amount: money(draft.monthlyAmount),
+            dueDate: draft.retainerStart ? new Date(draft.retainerStart) : null,
+            status: 'PENDING',
+          },
+        });
+      }
 
       return project;
     });
