@@ -95,13 +95,13 @@ clientflow/
 
 ### 💰 6. Financial Billing Engine
 
-- **Quotes**: Generate itemized pricing estimates, apply custom taxes/discounts, and track validation timelines.
-- **Invoices**: Convert estimates to invoice worksheets displaying subtotal, balance due, and amount paid.
-- **Payments Ledger**: Record partial payments, method of payment, and transaction references.
+- **Quotes**: Generate complex multi-item estimates with custom client details, taxes, discounts, and validation timelines using a dedicated full-page editor. Includes rich Project Scope definition and collapsible Terms & Conditions.
+- **Invoices**: Manage client billing with dedicated worksheets. Displays subtotal, tax details, itemized discounts, outstanding balance, and amount paid. Supports partial payments ledger integration.
+- **Payments Ledger**: Record received client payments, automatic status transitions (`DRAFT` ➔ `SENT` ➔ `PARTIALLY_PAID` ➔ `PAID` ➔ `OVERDUE`), and transaction history logs.
 - **Expense Tracker**: Track project expenses with categories and receipts.
-- **Advanced Billing Plans**: Supports billing configurations:
-  - `FULL_PAYMENT` | `ADVANCE_BALANCE` | `MILESTONE` | `MONTHLY_RETAINER` | `AMC` | `CUSTOM`
+- **Advanced Billing Plans & Auto-Activation**: Fully integrates quote-to-project activation. Approved quotations with billing plans (`FULL_PAYMENT`, `ADVANCE_BALANCE`, `MILESTONE`, `MONTHLY_RETAINER`, `AMC`, `CUSTOM`) auto-activate by creating the corresponding `BillingPlan` and `BillingStage` records upon project setup.
 - **Recurring Subscriptions**: Automatic invoicing scheduling for retainer or AMC services (Daily, Weekly, Monthly, Yearly).
+- **Corporate PDF Proposals**: Highly styled, multi-page client-facing PDFs generated dynamically for both quotations and invoices. Renders full project summary references, payment tables, billing schedule percentages, payment history, bank instructions, and formal authorized acceptance signatory blocks.
 
 ---
 
@@ -149,6 +149,14 @@ SMTP_PORT=2525
 SMTP_USER=your-smtp-user
 SMTP_PASS=your-smtp-password
 SMTP_FROM=no-reply@clientflow.local
+
+# Corporate Branding Details — formats the generated Quotation & Invoice PDFs
+COMPANY_NAME=Your Company Name
+COMPANY_ADDRESS=123 Corporate Street, Suite 500, City, State - 400001
+COMPANY_PHONE=+91 9000000000
+COMPANY_EMAIL=billing@yourcompany.com
+COMPANY_WEBSITE=www.yourcompany.com
+COMPANY_GST=22AAAAA0000A1Z5
 ```
 
 ### Frontend: `apps/web/.env`
