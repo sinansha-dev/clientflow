@@ -26,7 +26,14 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { useToastStore } from '../../stores/toast-store';
 import { errorMessage } from '../../lib/errors';
-import type { Client, Project, Invoice, InvoiceAttachment } from '@clientflow/types';
+import { DocumentPreview } from '../../components/finance/document-preview';
+import type {
+  Client,
+  Project,
+  Invoice,
+  InvoiceAttachment,
+  InvoiceActivity,
+} from '@clientflow/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -126,6 +133,7 @@ function Field({
   required,
   placeholder,
   className = '',
+  disabled,
 }: {
   label: string;
   value: string | number;
@@ -134,6 +142,7 @@ function Field({
   required?: boolean;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className={`grid gap-1 text-xs font-bold text-foreground/60 ${className}`}>
@@ -143,8 +152,9 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </label>
   );
@@ -157,6 +167,7 @@ function SelectField({
   options,
   required,
   className = '',
+  disabled,
 }: {
   label: string;
   value: string;
@@ -164,6 +175,7 @@ function SelectField({
   options: [string, string][];
   required?: boolean;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className={`grid gap-1 text-xs font-bold text-foreground/60 ${className}`}>
@@ -171,8 +183,9 @@ function SelectField({
       {required && <span className="inline text-danger"> *</span>}
       <select
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <option value="">Select</option>
         {options.map(([v, l]) => (
@@ -191,22 +204,25 @@ function Textarea({
   onChange,
   placeholder,
   rows = 5,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
+  disabled?: boolean;
 }) {
   return (
     <label className="grid gap-1 text-xs font-bold text-foreground/60 w-full">
       {label}
       <textarea
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary resize-y leading-relaxed"
+        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary resize-y leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </label>
   );
@@ -230,6 +246,13 @@ export function InvoiceEditorPage() {
   // ── Section 1: Basic Invoice Info ──
   const [clientId, setClientId] = useState('');
   const [projectId, setProjectId] = useState('');
+  const [type, setType] = useState<
+    'PROJECT' | 'ADVANCE' | 'MILESTONE' | 'FINAL' | 'RECURRING' | 'CREDIT_NOTE'
+  >('PROJECT');
+  const [billingPeriodFrom, setBillingPeriodFrom] = useState('');
+  const [billingPeriodTo, setBillingPeriodTo] = useState('');
+  const [recurringServiceId, setRecurringServiceId] = useState('');
+  const [recurringServices, setRecurringServices] = useState<any[]>([]);
   const [invoiceNumber, setInvoiceNumber] = useState('Auto-generated');
   const [title, setTitle] = useState('');
   const [issueDate, setIssueDate] = useState(today);
@@ -237,6 +260,7 @@ export function InvoiceEditorPage() {
   const [currency, setCurrency] = useState('USD');
   const [status, setStatus] = useState('DRAFT');
   const [notes, setNotes] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // ── Section 2: Billing Plan Context ──
   const [billingStageId, setBillingStageId] = useState<string | null>(null);
@@ -271,6 +295,14 @@ export function InvoiceEditorPage() {
   // ── Financial summaries ──
   const [amountPaid, setAmountPaid] = useState(0);
 
+  // ── Locked & Revision Flow States ──
+  const [activities, setActivities] = useState<InvoiceActivity[]>([]);
+  const [originalInvoiceId, setOriginalInvoiceId] = useState<string | null>(null);
+  const [revisionNumber, setRevisionNumber] = useState(0);
+  const [originalInvoiceNumber, setOriginalInvoiceNumber] = useState<string | null>(null);
+
+  const isLocked = isEditing && status !== 'DRAFT';
+
   // ── Computed ──
   const totals = useMemo(() => calcTotals(items, globalDiscount), [items, globalDiscount]);
   const balanceDue = useMemo(
@@ -290,17 +322,27 @@ export function InvoiceEditorPage() {
     [projects, clientId],
   );
 
+  const filteredRecurringServices = useMemo(() => {
+    return recurringServices.filter((s) => {
+      if (projectId) return s.projectId === projectId;
+      if (clientId) return s.project?.clientId === clientId;
+      return true;
+    });
+  }, [recurringServices, clientId, projectId]);
+
   // ── Load data ──
   useEffect(() => {
     const load = async () => {
       try {
         setLoading(true);
-        const [clientRes, projectRes] = await Promise.all([
+        const [clientRes, projectRes, recurringRes] = await Promise.all([
           api.get('/clients?limit=1000'),
           api.get('/projects?limit=1000'),
+          api.get('/recurring-services'),
         ]);
         setClients(clientRes.data.data?.items ?? []);
         setProjects(projectRes.data.data?.items ?? []);
+        setRecurringServices(recurringRes.data.data ?? []);
 
         if (id) {
           const iRes = await api.get('/invoices');
@@ -308,6 +350,16 @@ export function InvoiceEditorPage() {
           if (!inv) throw new Error('Invoice not found');
           setClientId(inv.clientId);
           setProjectId(inv.projectId ?? '');
+          setType((inv as any).type || 'PROJECT');
+          setBillingPeriodFrom(
+            (inv as any).billingPeriodFrom
+              ? String((inv as any).billingPeriodFrom).slice(0, 10)
+              : '',
+          );
+          setBillingPeriodTo(
+            (inv as any).billingPeriodTo ? String((inv as any).billingPeriodTo).slice(0, 10) : '',
+          );
+          setRecurringServiceId((inv as any).recurringServiceId || '');
           setInvoiceNumber(inv.invoiceNumber);
           setTitle(inv.title || 'Invoice');
           setIssueDate(String(inv.issueDate).slice(0, 10));
@@ -324,6 +376,12 @@ export function InvoiceEditorPage() {
           setPaymentInstructions(inv.paymentInstructions ?? '');
           setBillingStageId(inv.billingStageId ?? null);
           setAttachments((inv.attachments as InvoiceAttachment[]) ?? []);
+          setActivities(inv.activities ?? []);
+          setOriginalInvoiceId(inv.originalInvoiceId ?? null);
+          setRevisionNumber(inv.revisionNumber ?? 0);
+          if ((inv as any).originalInvoice) {
+            setOriginalInvoiceNumber((inv as any).originalInvoice.invoiceNumber);
+          }
 
           if (inv.billingStage) {
             setBillingPlanContext({
@@ -404,6 +462,68 @@ export function InvoiceEditorPage() {
   const updateAttachment = (i: number, field: keyof InvoiceAttachment, value: string) =>
     setAttachments((prev) => prev.map((a, idx) => (idx === i ? { ...a, [field]: value } : a)));
 
+  // ── Locked Actions ──
+  const resendInvoice = async () => {
+    try {
+      setSaving(true);
+      await api.post(`/invoices/${id}/send`);
+      notify({ type: 'success', title: 'Invoice sent', message: `Invoice resent successfully.` });
+      const iRes = await api.get('/invoices');
+      const inv: Invoice = (iRes.data.data as Invoice[]).find((x) => x.id === id)!;
+      if (inv) setActivities(inv.activities ?? []);
+    } catch (err) {
+      notify({ type: 'error', title: 'Resend failed', message: errorMessage(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const voidInvoice = async () => {
+    if (
+      !window.confirm('Are you sure you want to void this invoice? This action is irreversible.')
+    ) {
+      return;
+    }
+    try {
+      setSaving(true);
+      await api.post(`/invoices/${id}/void`);
+      notify({ type: 'success', title: 'Invoice voided' });
+      setStatus('VOID');
+      const iRes = await api.get('/invoices');
+      const inv: Invoice = (iRes.data.data as Invoice[]).find((x) => x.id === id)!;
+      if (inv) setActivities(inv.activities ?? []);
+    } catch (err) {
+      notify({ type: 'error', title: 'Void failed', message: errorMessage(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const reviseInvoice = async () => {
+    if (
+      !window.confirm(
+        'This will create a new editable draft invoice copied from this locked invoice. The original invoice will remain unchanged. Proceed?',
+      )
+    ) {
+      return;
+    }
+    try {
+      setSaving(true);
+      const res = await api.post(`/invoices/${id}/revise`);
+      const newInvoice = res.data.data;
+      notify({
+        type: 'success',
+        title: 'Revision created',
+        message: `Draft revision ${newInvoice.invoiceNumber} created.`,
+      });
+      navigate(`/invoices/${newInvoice.id}/edit`);
+    } catch (err) {
+      notify({ type: 'error', title: 'Revision failed', message: errorMessage(err) });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // ── Save ──
   const save = async (nextStatus?: string) => {
     if (!clientId) {
@@ -432,6 +552,10 @@ export function InvoiceEditorPage() {
       const payload = {
         clientId,
         projectId: projectId || undefined,
+        type,
+        billingPeriodFrom: billingPeriodFrom || undefined,
+        billingPeriodTo: billingPeriodTo || undefined,
+        recurringServiceId: recurringServiceId || undefined,
         title,
         issueDate,
         dueDate,
@@ -487,6 +611,12 @@ export function InvoiceEditorPage() {
           <h1 className="mt-2 text-2xl font-bold text-foreground">
             {isEditing ? `Edit Invoice — ${invoiceNumber}` : 'New Invoice'}
           </h1>
+          {originalInvoiceNumber && (
+            <p className="mt-1 text-sm font-semibold text-primary">
+              Revision of <span className="underline">{originalInvoiceNumber}</span> (Revision #
+              {revisionNumber})
+            </p>
+          )}
           <p className="mt-1 text-sm text-foreground/55">
             Create or update client billing requests with full project summary integration.
           </p>
@@ -499,6 +629,16 @@ export function InvoiceEditorPage() {
           <X className="h-4 w-4" /> Cancel
         </button>
       </div>
+
+      {isLocked && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3.5 text-amber-600 dark:text-amber-400">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p className="text-sm font-semibold leading-relaxed">
+            This invoice has been sent and is locked. Create a revision or void the invoice if
+            changes are required.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         {/* ── Left: Form Sections ── */}
@@ -513,6 +653,7 @@ export function InvoiceEditorPage() {
               <SelectField
                 label="Client"
                 value={clientId}
+                disabled={isLocked}
                 onChange={(v) => {
                   setClientId(v);
                   setProjectId('');
@@ -523,30 +664,100 @@ export function InvoiceEditorPage() {
               <SelectField
                 label="Project"
                 value={projectId}
+                disabled={isLocked}
                 onChange={setProjectId}
                 options={[
                   ['', 'No project (Internal)'] as [string, string],
                   ...projectOptions.map((p) => [p.id, p.projectName] as [string, string]),
                 ]}
               />
+              <SelectField
+                label="Invoice Type"
+                value={type}
+                disabled={isLocked}
+                onChange={(v) => {
+                  setType(v as any);
+                  if (v !== 'RECURRING') {
+                    setBillingPeriodFrom('');
+                    setBillingPeriodTo('');
+                    setRecurringServiceId('');
+                  }
+                }}
+                options={[
+                  ['PROJECT', 'Project Invoice'],
+                  ['ADVANCE', 'Advance Invoice'],
+                  ['MILESTONE', 'Milestone Invoice'],
+                  ['FINAL', 'Final Invoice'],
+                  ['RECURRING', 'Recurring Service (AMC)'],
+                  ['CREDIT_NOTE', 'Credit Note'],
+                ]}
+                required
+              />
+              {type === 'RECURRING' && (
+                <>
+                  <SelectField
+                    label="Linked Recurring Service"
+                    value={recurringServiceId}
+                    disabled={isLocked}
+                    onChange={setRecurringServiceId}
+                    options={filteredRecurringServices.map(
+                      (s) =>
+                        [s.id, `${s.name} (${money(s.amount, currency)} / ${s.interval})`] as [
+                          string,
+                          string,
+                        ],
+                    )}
+                  />
+                  <Field
+                    label="Billing Period From"
+                    type="date"
+                    value={billingPeriodFrom}
+                    disabled={isLocked}
+                    onChange={setBillingPeriodFrom}
+                  />
+                  <Field
+                    label="Billing Period To"
+                    type="date"
+                    value={billingPeriodTo}
+                    disabled={isLocked}
+                    onChange={setBillingPeriodTo}
+                  />
+                </>
+              )}
               <Field
                 label="Invoice Number"
                 value={invoiceNumber}
                 onChange={() => {}}
                 className="opacity-60"
+                disabled
               />
               <Field
                 label="Invoice Title"
                 value={title}
+                disabled={isLocked}
                 onChange={setTitle}
                 required
                 placeholder="e.g. Website Development - Milestone 1"
               />
-              <Field label="Issue Date" type="date" value={issueDate} onChange={setIssueDate} />
-              <Field label="Due Date" type="date" value={dueDate} onChange={setDueDate} required />
+              <Field
+                label="Issue Date"
+                type="date"
+                value={issueDate}
+                disabled={isLocked}
+                onChange={setIssueDate}
+              />
+              <Field
+                label="Due Date"
+                type="date"
+                value={dueDate}
+                disabled={isLocked}
+                onChange={setDueDate}
+                required
+              />
               <SelectField
                 label="Currency"
                 value={currency}
+                disabled={isLocked}
                 onChange={setCurrency}
                 options={[
                   ['USD', 'USD — US Dollar'],
@@ -649,16 +860,18 @@ export function InvoiceEditorPage() {
                         <input
                           type="text"
                           value={item.name}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'name', e.target.value)}
                           placeholder="Service description"
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                         <input
                           type="text"
                           value={item.description}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'description', e.target.value)}
                           placeholder="Short memo detail (optional)"
-                          className="mt-1 w-full rounded-lg border border-transparent bg-muted/30 px-2.5 py-1 text-xs text-foreground/60 outline-none focus:border-border"
+                          className="mt-1 w-full rounded-lg border border-transparent bg-muted/30 px-2.5 py-1 text-xs text-foreground/60 outline-none focus:border-border disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -666,10 +879,11 @@ export function InvoiceEditorPage() {
                           type="number"
                           value={item.quantity}
                           min={1}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'quantity', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -677,10 +891,11 @@ export function InvoiceEditorPage() {
                           type="number"
                           value={item.unitPrice}
                           min={0}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'unitPrice', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -689,8 +904,9 @@ export function InvoiceEditorPage() {
                           value={item.taxRate}
                           min={0}
                           max={100}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'taxRate', Number(e.target.value))}
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -698,10 +914,11 @@ export function InvoiceEditorPage() {
                           type="number"
                           value={item.discount}
                           min={0}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'discount', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60"
                         />
                       </td>
                       <td className="py-2 text-right font-bold text-foreground">
@@ -709,23 +926,27 @@ export function InvoiceEditorPage() {
                       </td>
                       <td className="py-2 pl-2">
                         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                          <button
-                            type="button"
-                            onClick={() => duplicateItem(item._key)}
-                            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-foreground/50 hover:text-foreground transition"
-                            title="Duplicate"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item._key)}
-                            disabled={items.length === 1}
-                            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/50 hover:text-danger transition disabled:opacity-30"
-                            title="Remove"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
+                          {!isLocked && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => duplicateItem(item._key)}
+                                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-foreground/50 hover:text-foreground transition"
+                                title="Duplicate"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeItem(item._key)}
+                                disabled={items.length === 1}
+                                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/50 hover:text-danger transition disabled:opacity-30"
+                                title="Remove"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -735,14 +956,18 @@ export function InvoiceEditorPage() {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={addItem}
-                className="border border-dashed border-border text-sm gap-1.5"
-              >
-                <Plus className="h-4 w-4" /> Add Item
-              </Button>
+              {!isLocked ? (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={addItem}
+                  className="border border-dashed border-border text-sm gap-1.5"
+                >
+                  <Plus className="h-4 w-4" /> Add Item
+                </Button>
+              ) : (
+                <div />
+              )}
               <div className="flex items-center gap-3 text-sm">
                 <label className="text-xs font-bold text-foreground/60">
                   Global Discount
@@ -750,8 +975,9 @@ export function InvoiceEditorPage() {
                     type="number"
                     value={globalDiscount}
                     min={0}
+                    disabled={isLocked}
                     onChange={(e) => setGlobalDiscount(Number(e.target.value))}
-                    className="ml-2 w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right text-foreground outline-none focus:border-primary"
+                    className="ml-2 w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right text-foreground outline-none focus:border-primary disabled:opacity-60"
                   />
                 </label>
               </div>
@@ -809,6 +1035,7 @@ export function InvoiceEditorPage() {
               <SelectField
                 label="Preferred Payment Method"
                 value={paymentMethod}
+                disabled={isLocked}
                 onChange={setPaymentMethod}
                 options={[
                   ['Bank Transfer', 'Bank Transfer (ACH / Wire)'],
@@ -819,6 +1046,7 @@ export function InvoiceEditorPage() {
               <Textarea
                 label="Account Numbers / Routing details / UPI / Instructions"
                 value={paymentInstructions}
+                disabled={isLocked}
                 onChange={setPaymentInstructions}
                 placeholder="Include your bank IBAN, routing codes, or billing guidelines..."
                 rows={4}
@@ -836,6 +1064,7 @@ export function InvoiceEditorPage() {
             <Textarea
               label="Invoice Notes"
               value={notes}
+              disabled={isLocked}
               onChange={setNotes}
               placeholder="e.g. Thank you for choosing ClientFlow. Please resolve before due date."
               rows={3}
@@ -844,6 +1073,7 @@ export function InvoiceEditorPage() {
               <Textarea
                 label="Terms & Conditions (visible on invoice document)"
                 value={termsConditions}
+                disabled={isLocked}
                 onChange={setTermsConditions}
                 rows={4}
               />
@@ -863,12 +1093,14 @@ export function InvoiceEditorPage() {
                   <Field
                     label={i === 0 ? 'File Name' : ''}
                     value={att.name}
+                    disabled={isLocked}
                     onChange={(v) => updateAttachment(i, 'name', v)}
                     placeholder="Work_Order.pdf"
                   />
                   <Field
                     label={i === 0 ? 'URL Link' : ''}
                     value={att.url}
+                    disabled={isLocked}
                     onChange={(v) => updateAttachment(i, 'url', v)}
                     placeholder="https://..."
                   />
@@ -876,8 +1108,9 @@ export function InvoiceEditorPage() {
                     {i === 0 && <p className="text-xs font-bold text-foreground/60 mb-1">Type</p>}
                     <select
                       value={att.type}
+                      disabled={isLocked}
                       onChange={(e) => updateAttachment(i, 'type', e.target.value)}
-                      className="h-10 rounded-xl border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                      className="h-10 rounded-xl border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {(['PDF', 'CONTRACT', 'PO', 'REQUIREMENT', 'OTHER'] as const).map((t) => (
                         <option key={t} value={t}>
@@ -886,23 +1119,27 @@ export function InvoiceEditorPage() {
                       ))}
                     </select>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(i)}
-                    className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-danger/10 text-foreground/40 hover:text-danger transition"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(i)}
+                      className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-danger/10 text-foreground/40 hover:text-danger transition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               ))}
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={addAttachment}
-                className="border border-dashed border-border text-sm gap-1.5 w-fit"
-              >
-                <Plus className="h-4 w-4" /> Add Attachment
-              </Button>
+              {!isLocked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={addAttachment}
+                  className="border border-dashed border-border text-sm gap-1.5 w-fit"
+                >
+                  <Plus className="h-4 w-4" /> Add Attachment
+                </Button>
+              )}
             </div>
           </Section>
 
@@ -916,11 +1153,49 @@ export function InvoiceEditorPage() {
             <Textarea
               label="Staff Notes"
               value={internalNotes}
+              disabled={isLocked}
               onChange={setInternalNotes}
               placeholder="e.g. Waiting on Client approval before processing bank transfer..."
               rows={4}
             />
           </Section>
+
+          {/* ── Section 9: Audit Trail Timeline ── */}
+          {isEditing && activities.length > 0 && (
+            <Section
+              icon={ScrollText}
+              title="Invoice History Timeline"
+              subtitle="Auditable track record of lifecycle updates"
+              defaultOpen={true}
+            >
+              <div className="relative border-l border-border pl-6 ml-3 space-y-6 py-2">
+                {activities.map((act) => (
+                  <div key={act.id} className="relative">
+                    {/* Dot indicator */}
+                    <div className="absolute -left-[31px] mt-1.5 flex h-4 w-4 items-center justify-center rounded-full border-2 border-background bg-primary">
+                      <div className="h-1.5 w-1.5 rounded-full bg-background" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-foreground">
+                          {act.action.replace('_', ' ')}
+                        </span>
+                        <span className="text-[10px] font-medium text-foreground/45">
+                          {new Date(act.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-foreground/60 mt-1">{act.description}</p>
+                      {act.user && (
+                        <p className="text-[10px] text-foreground/45 mt-0.5">
+                          Triggered by {act.user.firstName} {act.user.lastName} ({act.user.role})
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          )}
 
           {/* ── Footer Actions ── */}
           <div className="flex flex-wrap gap-3 justify-between pt-2">
@@ -936,30 +1211,65 @@ export function InvoiceEditorPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => save('DRAFT')}
-                disabled={saving}
-                className="border border-border gap-1.5"
-              >
-                <Save className="h-4 w-4" /> Save Draft
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() =>
-                  notify({ type: 'info', title: 'Preview', message: 'PDF preview coming soon' })
-                }
+                onClick={() => setIsPreviewOpen(true)}
                 className="border border-border gap-1.5"
               >
                 <Eye className="h-4 w-4" /> Preview
               </Button>
-              <Button
-                type="button"
-                onClick={() => save('SENT')}
-                disabled={saving}
-                className="gap-1.5"
-              >
-                <Send className="h-4 w-4" /> {saving ? 'Saving...' : 'Save & Send'}
-              </Button>
+              {isLocked ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={resendInvoice}
+                    disabled={saving}
+                    className="border border-border gap-1.5"
+                  >
+                    <Send className="h-4 w-4" /> Resend
+                  </Button>
+                  {status !== 'VOID' && status !== 'PAID' && amountPaid === 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={voidInvoice}
+                      disabled={saving}
+                      className="border border-danger/20 text-danger hover:bg-danger/5 gap-1.5"
+                    >
+                      Void Invoice
+                    </Button>
+                  )}
+                  {status !== 'VOID' && (
+                    <Button
+                      type="button"
+                      onClick={reviseInvoice}
+                      disabled={saving}
+                      className="gap-1.5"
+                    >
+                      Revise Invoice
+                    </Button>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => save('DRAFT')}
+                    disabled={saving}
+                    className="border border-border gap-1.5"
+                  >
+                    <Save className="h-4 w-4" /> Save Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => save('SENT')}
+                    disabled={saving}
+                    className="gap-1.5"
+                  >
+                    <Send className="h-4 w-4" /> {saving ? 'Saving...' : 'Save & Send'}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1041,6 +1351,43 @@ export function InvoiceEditorPage() {
           </Card>
         </div>
       </div>
+
+      <DocumentPreview
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        documentType="INVOICE"
+        data={{
+          id,
+          title,
+          number: invoiceNumber === 'Auto-generated' ? '' : invoiceNumber,
+          issueDate,
+          dueDate,
+          currency,
+          status,
+          client: selectedClient,
+          project: selectedProject,
+          items,
+          globalDiscount,
+          notes,
+          scope,
+          termsConditions,
+          paymentMethod,
+          paymentInstructions,
+          billingStage: billingStageId
+            ? {
+                name: billingPlanContext?.stageName,
+                amount: billingPlanContext?.amount,
+                billingPlan: {
+                  billingType: billingPlanContext?.planType,
+                  totalAmount: billingPlanContext?.totalAmount,
+                },
+              }
+            : undefined,
+          type,
+          billingPeriodFrom,
+          billingPeriodTo,
+        }}
+      />
     </div>
   );
 }

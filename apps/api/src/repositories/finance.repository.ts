@@ -105,7 +105,15 @@ async function visibilityWhere(user: FinanceUser, base: Prisma.QuotationWhereInp
 async function invoiceVisibilityWhere(user: FinanceUser, base: Prisma.InvoiceWhereInput = {}) {
   if (user.role === 'CLIENT') {
     const clientIds = await clientIdsForUser(user);
-    return { ...base, clientId: { in: clientIds ?? [] } };
+    const visibleStatuses = ['SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VIEWED', 'OPEN'];
+    if (process.env.SHOW_VOIDED_INVOICES_TO_CLIENTS !== 'false') {
+      visibleStatuses.push('VOID');
+    }
+    return {
+      ...base,
+      clientId: { in: clientIds ?? [] },
+      status: { in: visibleStatuses },
+    };
   }
   if (user.role === 'STAFF') {
     const projectIds = await projectIdsForStaff(user);
@@ -127,6 +135,21 @@ const invoiceInclude = {
   payments: true,
   creator: true,
   recurringService: true,
+  originalInvoice: { select: { id: true, invoiceNumber: true } },
+  activities: {
+    orderBy: { createdAt: 'asc' as const },
+    include: {
+      user: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.InvoiceInclude;
 const paymentInclude = {
   invoice: { include: { project: true } },
@@ -297,7 +320,7 @@ export const financeRepository = {
     const client = await prisma.client.findUnique({ where: { id: data.clientId } });
     const calculated = totals(data.items, data.discount);
     const invoiceType = data.type || 'PROJECT';
-    return prisma.invoice.create({
+    const created = await prisma.invoice.create({
       data: {
         invoiceNumber: await nextNumber(invoiceType),
         clientId: data.clientId,
@@ -328,6 +351,13 @@ export const financeRepository = {
       },
       include: invoiceInclude,
     });
+    await financeRepository.logInvoiceActivity(
+      created.id,
+      userId,
+      'CREATED',
+      `Invoice ${created.invoiceNumber} created as Draft`,
+    );
+    return created;
   },
 
   async updateInvoice(id: string, data: any, currentUser?: FinanceUser) {
@@ -339,8 +369,13 @@ export const financeRepository = {
     const { items, ...rest } = data;
     const existing = await prisma.invoice.findFirst({ where: { id, deletedAt: null } });
     if (!existing) return null;
+
+    if (existing.status !== 'DRAFT') {
+      throw new Error('Invoice is locked and cannot be modified.');
+    }
+
     const calculated = items ? totals(items, rest.discount ?? existing.discount) : null;
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       if (calculated) await tx.invoiceItem.deleteMany({ where: { invoiceId: id } });
       return tx.invoice.update({
         where: { id },
@@ -371,6 +406,16 @@ export const financeRepository = {
         include: invoiceInclude,
       });
     });
+
+    if (currentUser) {
+      await financeRepository.logInvoiceActivity(
+        updated.id,
+        currentUser.id,
+        'EDITED',
+        'Invoice details updated',
+      );
+    }
+    return updated;
   },
 
   async deleteInvoice(id: string, currentUser?: FinanceUser) {
@@ -378,6 +423,11 @@ export const financeRepository = {
       const { AuthorizationService } = require('../services/authorization.service');
       const hasAccess = await AuthorizationService.canAccessInvoice(id, currentUser);
       if (!hasAccess) return null;
+    }
+    const existing = await prisma.invoice.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) return null;
+    if (existing.status !== 'DRAFT') {
+      throw new Error('Only draft invoices can be deleted.');
     }
     return prisma.invoice.update({ where: { id }, data: { deletedAt: new Date() } });
   },
@@ -388,7 +438,35 @@ export const financeRepository = {
       const hasAccess = await AuthorizationService.canAccessInvoice(id, currentUser);
       if (!hasAccess) return null;
     }
-    return prisma.invoice.update({ where: { id }, data: { status }, include: invoiceInclude });
+    const existing = await prisma.invoice.findUnique({ where: { id } });
+    if (!existing) return null;
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: { status },
+      include: invoiceInclude,
+    });
+
+    const userId = currentUser?.id ?? null;
+    if (status === 'SENT') {
+      const isResend = existing.status === 'SENT';
+      const action = isResend ? 'RESENT' : 'SENT';
+      const desc = isResend
+        ? `Invoice ${existing.invoiceNumber} resent to client`
+        : `Invoice ${existing.invoiceNumber} sent to client`;
+      await financeRepository.logInvoiceActivity(id, userId, action, desc);
+    } else if (status === 'VOID') {
+      await financeRepository.logInvoiceActivity(id, userId, 'VOIDED', `Invoice voided`);
+    } else {
+      await financeRepository.logInvoiceActivity(
+        id,
+        userId,
+        'STATUS_UPDATED',
+        `Invoice status updated to ${status}`,
+      );
+    }
+
+    return updated;
   },
 
   async listPayments(user: FinanceUser, filters: { clientId?: string; invoiceId?: string }) {
@@ -461,10 +539,25 @@ export const financeRepository = {
             : new Date(invoice.dueDate) < new Date()
               ? 'OVERDUE'
               : 'SENT';
-    return prisma.invoice.update({
+    const updated = await prisma.invoice.update({
       where: { id: invoiceId },
       data: { amountPaid, balanceDue, status },
     });
+
+    if (invoice.amountPaid !== amountPaid || invoice.status !== status) {
+      const latestPayment = invoice.payments[invoice.payments.length - 1];
+      const recorderId = latestPayment?.recordedBy ?? null;
+      if (invoice.amountPaid !== amountPaid) {
+        const diff = money(amountPaid - invoice.amountPaid);
+        await financeRepository.logInvoiceActivity(
+          invoiceId,
+          recorderId,
+          'PAYMENT_RECEIVED',
+          `Payment of ${invoice.currency} ${diff.toLocaleString()} received. Status updated to ${status}`,
+        );
+      }
+    }
+    return updated;
   },
 
   async listExpenses(user: FinanceUser, filters: { projectId?: string }) {
@@ -1024,5 +1117,117 @@ export const financeRepository = {
 
       return project;
     });
+  },
+
+  async logInvoiceActivity(
+    invoiceId: string,
+    userId: string | null,
+    action: string,
+    description: string,
+  ) {
+    try {
+      await prisma.invoiceActivity.create({
+        data: {
+          invoiceId,
+          userId,
+          action,
+          description,
+        },
+      });
+    } catch (err) {
+      console.error('Failed to log invoice activity:', err);
+    }
+  },
+
+  async reviseInvoice(id: string, userId: string) {
+    const original = await prisma.invoice.findUnique({
+      where: { id, deletedAt: null },
+      include: { items: true },
+    });
+    if (!original) throw new Error('Original invoice not found');
+
+    const invoiceType = original.type || 'PROJECT';
+    const newNumber = await nextNumber(invoiceType);
+    const revisionNumber = (original.revisionNumber ?? 0) + 1;
+
+    const revision = await prisma.invoice.create({
+      data: {
+        invoiceNumber: newNumber,
+        clientId: original.clientId,
+        projectId: original.projectId,
+        title: original.title.includes('(Revision')
+          ? original.title
+          : `${original.title} (Revision)`,
+        scope: original.scope,
+        issueDate: new Date(),
+        dueDate: original.dueDate,
+        status: 'DRAFT',
+        currency: original.currency,
+        subtotal: original.subtotal,
+        tax: original.tax,
+        discount: original.discount,
+        total: original.total,
+        balanceDue: original.total,
+        notes: original.notes,
+        termsConditions: original.termsConditions,
+        paymentMethod: original.paymentMethod,
+        paymentInstructions: original.paymentInstructions,
+        createdBy: userId,
+        type: original.type,
+        billingPeriodFrom: original.billingPeriodFrom,
+        billingPeriodTo: original.billingPeriodTo,
+        recurringServiceId: original.recurringServiceId,
+        originalInvoiceId: original.id,
+        revisionNumber: revisionNumber,
+        items: {
+          create: original.items.map((item) => ({
+            name: item.name,
+            description: item.description,
+            quantity: item.quantity,
+            unitPrice: item.unitPrice,
+            taxRate: item.taxRate,
+            total: item.total,
+          })),
+        },
+      },
+      include: invoiceInclude,
+    });
+
+    await financeRepository.logInvoiceActivity(
+      original.id,
+      userId,
+      'REVISION_CREATED',
+      `Created revision draft ${newNumber}`,
+    );
+    await financeRepository.logInvoiceActivity(
+      revision.id,
+      userId,
+      'CREATED',
+      `Draft revision created from ${original.invoiceNumber}`,
+    );
+
+    return revision;
+  },
+
+  async voidInvoice(id: string, userId: string) {
+    const invoice = await prisma.invoice.findUnique({
+      where: { id, deletedAt: null },
+    });
+    if (!invoice) throw new Error('Invoice not found');
+    if (invoice.amountPaid > 0 || invoice.status === 'PAID') {
+      throw new Error('Cannot void an invoice that has payments recorded.');
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        status: 'VOID',
+        balanceDue: 0,
+      },
+      include: invoiceInclude,
+    });
+
+    await financeRepository.logInvoiceActivity(id, userId, 'VOIDED', 'Invoice voided');
+    return updated;
   },
 };

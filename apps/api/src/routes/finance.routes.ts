@@ -149,6 +149,21 @@ quotationRoutes.get(
 
 export const invoiceRoutes = Router();
 invoiceRoutes.use(requireAuth);
+
+invoiceRoutes.get('/company-details', requireRole('ADMIN', 'STAFF'), (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      name: process.env.COMPANY_NAME || 'Your Company',
+      address: process.env.COMPANY_ADDRESS || 'Address, City, State',
+      phone: process.env.COMPANY_PHONE || '+91 0000000000',
+      email: process.env.COMPANY_EMAIL || 'contact@yourcompany.com',
+      website: process.env.COMPANY_WEBSITE || 'www.yourcompany.com',
+      gst: process.env.COMPANY_GST || '',
+    },
+  });
+});
+
 invoiceRoutes.get('/', requireRole('ADMIN', 'STAFF', 'CLIENT'), (req, res, next) =>
   financeController.listInvoices(req, res).catch(next),
 );
@@ -170,6 +185,18 @@ invoiceRoutes.post(
   requireRole('ADMIN'),
   validate(idParams, 'params'),
   (req, res, next) => financeController.sendInvoice(req, res).catch(next),
+);
+invoiceRoutes.post(
+  '/:id/revise',
+  requireRole('ADMIN'),
+  validate(idParams, 'params'),
+  (req, res, next) => financeController.reviseInvoice(req, res).catch(next),
+);
+invoiceRoutes.post(
+  '/:id/void',
+  requireRole('ADMIN'),
+  validate(idParams, 'params'),
+  (req, res, next) => financeController.voidInvoice(req, res).catch(next),
 );
 invoiceRoutes.get(
   '/:id/pdf',

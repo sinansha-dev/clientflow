@@ -90,6 +90,18 @@ export const financeController = {
     return ok(res, 'Invoice marked as sent', data);
   },
 
+  async reviseInvoice(req: Request, res: Response) {
+    const data = await financeRepository.reviseInvoice(req.params.id!, req.user!.id);
+    if (!data) throw notFound('Invoice not found');
+    return ok(res, 'Invoice revision draft created', data);
+  },
+
+  async voidInvoice(req: Request, res: Response) {
+    const data = await financeRepository.voidInvoice(req.params.id!, req.user!.id);
+    if (!data) throw notFound('Invoice not found');
+    return ok(res, 'Invoice voided successfully', data);
+  },
+
   async invoicePdf(req: Request, res: Response) {
     const invoices = await financeRepository.listInvoices(req.user!, {});
     const invoice = invoices.find((item) => item.id === req.params.id) as any;

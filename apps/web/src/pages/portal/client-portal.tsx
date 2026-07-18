@@ -684,7 +684,14 @@ export function ClientPortalPage() {
                               key={invoice.id}
                               className="border-b border-border hover:bg-muted/5 transition"
                             >
-                              <td className="px-6 py-4 font-bold">{invoice.invoiceNumber}</td>
+                              <td className="px-6 py-4 font-bold">
+                                {invoice.invoiceNumber}
+                                {invoice.originalInvoice && (
+                                  <span className="text-[10px] text-primary block font-normal mt-0.5 animate-fade-in">
+                                    Revision of {invoice.originalInvoice.invoiceNumber}
+                                  </span>
+                                )}
+                              </td>
                               <td className="px-6 py-4 font-semibold text-foreground/60">
                                 {invoice.type || 'PROJECT'}
                               </td>
@@ -708,7 +715,9 @@ export function ClientPortalPage() {
                                           ? 'bg-blue-500/10 text-blue-600'
                                           : invoice.status === 'OVERDUE'
                                             ? 'bg-rose-500/10 text-rose-600'
-                                            : 'bg-amber-500/10 text-amber-600'
+                                            : invoice.status === 'VOID'
+                                              ? 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                              : 'bg-amber-500/10 text-amber-600'
                                   }`}
                                 >
                                   {invoice.status}
@@ -732,7 +741,7 @@ export function ClientPortalPage() {
                               colSpan={7}
                               className="px-6 py-12 text-center text-foreground/45 italic"
                             >
-                              No project invoices found.
+                              No project invoices have been issued yet.
                             </td>
                           </tr>
                         )}
@@ -772,6 +781,11 @@ export function ClientPortalPage() {
                                 <span className="text-[10px] text-foreground/50 block font-normal mt-0.5">
                                   {invoice.recurringService?.name || 'AMC Retainer'}
                                 </span>
+                                {invoice.originalInvoice && (
+                                  <span className="text-[10px] text-primary block font-normal mt-0.5 animate-fade-in">
+                                    Revision of {invoice.originalInvoice.invoiceNumber}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-6 py-4 font-medium text-foreground/75">
                                 {invoice.billingPeriodFrom && invoice.billingPeriodTo ? (
@@ -807,7 +821,9 @@ export function ClientPortalPage() {
                                           ? 'bg-blue-500/10 text-blue-600'
                                           : invoice.status === 'OVERDUE'
                                             ? 'bg-rose-500/10 text-rose-600'
-                                            : 'bg-amber-500/10 text-amber-600'
+                                            : invoice.status === 'VOID'
+                                              ? 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                              : 'bg-amber-500/10 text-amber-600'
                                   }`}
                                 >
                                   {invoice.status}
@@ -831,7 +847,7 @@ export function ClientPortalPage() {
                               colSpan={7}
                               className="px-6 py-12 text-center text-foreground/45 italic"
                             >
-                              No recurring service invoices found.
+                              No recurring service invoices have been issued yet.
                             </td>
                           </tr>
                         )}

@@ -85,7 +85,15 @@ export const portalRepository = {
           include: { user: { select: userSelect } },
         },
         invoices: {
-          where: { deletedAt: null },
+          where: {
+            deletedAt: null,
+            status: {
+              in:
+                process.env.SHOW_VOIDED_INVOICES_TO_CLIENTS !== 'false'
+                  ? ['SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VIEWED', 'OPEN', 'VOID']
+                  : ['SENT', 'PARTIALLY_PAID', 'PAID', 'OVERDUE', 'VIEWED', 'OPEN'],
+            },
+          },
           orderBy: { issueDate: 'desc' },
           include: { payments: true },
         },

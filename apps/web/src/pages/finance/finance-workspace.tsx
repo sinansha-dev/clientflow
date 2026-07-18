@@ -28,6 +28,7 @@ import {
   Zap,
   Download,
   Pencil,
+  Eye,
 } from 'lucide-react';
 
 type Tab =
@@ -909,6 +910,11 @@ function InvoiceTable({
                         Project: {i.project.projectName}
                       </span>
                     )}
+                    {(i as any).originalInvoice && (
+                      <span className="text-[10px] text-primary block font-normal mt-0.5">
+                        Revision of {(i as any).originalInvoice.invoiceNumber}
+                      </span>
+                    )}
                     {i.type === 'RECURRING' && i.billingPeriodFrom && i.billingPeriodTo && (
                       <span className="text-[9px] text-foreground/55 font-medium block mt-0.5">
                         Period: {new Date(i.billingPeriodFrom).toLocaleDateString()} –{' '}
@@ -928,7 +934,9 @@ function InvoiceTable({
                               ? 'bg-blue-500/10 text-blue-600'
                               : i.status === 'OVERDUE'
                                 ? 'bg-rose-500/10 text-rose-600'
-                                : 'bg-amber-500/10 text-amber-600'
+                                : i.status === 'VOID'
+                                  ? 'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                  : 'bg-amber-500/10 text-amber-600'
                       }`}
                     >
                       {i.status}
@@ -942,9 +950,13 @@ function InvoiceTable({
                       className="h-8 w-8 p-0"
                       variant="ghost"
                       onClick={() => onEdit(i.id)}
-                      title="Edit invoice"
+                      title={i.status === 'DRAFT' ? 'Edit invoice' : 'View / Revise invoice'}
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      {i.status === 'DRAFT' ? (
+                        <Pencil className="h-3.5 w-3.5" />
+                      ) : (
+                        <Eye className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                     <a
                       href={`${api.defaults.baseURL}/invoices/${i.id}/pdf`}
@@ -955,15 +967,17 @@ function InvoiceTable({
                     >
                       <Download className="h-3.5 w-3.5" />
                     </a>
-                    <Button
-                      className="h-8 w-8 p-0"
-                      variant="ghost"
-                      onClick={() => onSend(i.id)}
-                      title="Send invoice email"
-                    >
-                      <Send className="h-3.5 w-3.5" />
-                    </Button>
-                    {i.balanceDue > 0 && (
+                    {i.status !== 'VOID' && (
+                      <Button
+                        className="h-8 w-8 p-0"
+                        variant="ghost"
+                        onClick={() => onSend(i.id)}
+                        title={i.status === 'DRAFT' ? 'Send invoice email' : 'Resend invoice email'}
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    {i.balanceDue > 0 && i.status !== 'VOID' && (
                       <Button className="h-8 px-3 text-xs font-bold" onClick={() => onPayment(i)}>
                         Record Payment
                       </Button>

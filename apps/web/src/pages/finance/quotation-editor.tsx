@@ -25,6 +25,7 @@ import { Button } from '../../components/ui/button';
 import { Card } from '../../components/ui/card';
 import { useToastStore } from '../../stores/toast-store';
 import { errorMessage } from '../../lib/errors';
+import { DocumentPreview } from '../../components/finance/document-preview';
 import type {
   Client,
   Project,
@@ -259,6 +260,7 @@ export function QuotationEditorPage() {
   const [currency, setCurrency] = useState('USD');
   const [status, setStatus] = useState('DRAFT');
   const [description, setDescription] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
   // ── Section 2: Items ──
   const [items, setItems] = useState<LineItem[]>([
@@ -1138,9 +1140,7 @@ export function QuotationEditorPage() {
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() =>
-                  notify({ type: 'info', title: 'Preview', message: 'PDF preview coming soon' })
-                }
+                onClick={() => setIsPreviewOpen(true)}
                 className="border border-border gap-1.5"
               >
                 <Eye className="h-4 w-4" /> Preview
@@ -1257,6 +1257,34 @@ export function QuotationEditorPage() {
           </Card>
         </div>
       </div>
+
+      <DocumentPreview
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        documentType="QUOTATION"
+        data={{
+          id,
+          title,
+          number: quoteNumber === 'Auto-generated' ? '' : quoteNumber,
+          issueDate: quoteDate,
+          validUntil,
+          currency,
+          status,
+          client: selectedClient,
+          project: projects.find((p) => p.id === projectId),
+          items,
+          globalDiscount,
+          notes,
+          scope,
+          termsConditions,
+          billingType,
+          billingStages,
+          monthlyAmount,
+          retainerStart,
+          retainerDuration,
+          billingBreakdown,
+        }}
+      />
     </div>
   );
 }
