@@ -4,8 +4,11 @@ import { financeRepository } from '../repositories/finance.repository';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
-import { generateQuotationPdf } from '../utils/quotation-pdf';
-import { generateInvoicePdf } from '../utils/invoice-pdf';
+import { generateQuotationPdf, generateQuotationPdfBuffer } from '../utils/quotation-pdf';
+import { generateInvoicePdf, generateInvoicePdfBuffer } from '../utils/invoice-pdf';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
+import { prisma } from '../config/prisma';
 
 export const financeController = {
   async listQuotations(req: Request, res: Response) {
@@ -18,6 +21,32 @@ export const financeController = {
 
   async createQuotation(req: Request, res: Response) {
     const data = await financeRepository.createQuotation(req.user!.id, req.body);
+
+    // Fetch client email for notification
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { email: true, companyName: true },
+    });
+
+    const recipients: string[] = [req.user!.id];
+    if (client?.email) recipients.push(client.email);
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.QUOTATION_CREATED,
+        recipients,
+        {
+          quoteNumber: data.quoteNumber,
+          quoteTotal: data.total,
+          validUntil: data.validUntil ? new Date(data.validUntil).toLocaleDateString() : 'N/A',
+          clientName: client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/quotations/${data.id}`,
+          actionText: 'View Quotation',
+        },
+        { sendEmail: true },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Quotation Created notification'));
+
     return ok(res, 'Quotation created successfully', data, 201);
   },
 
@@ -36,12 +65,83 @@ export const financeController = {
   async sendQuotation(req: Request, res: Response) {
     const data = await financeRepository.setQuotationStatus(req.params.id!, 'SENT', req.user);
     if (!data) throw notFound('Quotation not found');
+
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { email: true, companyName: true },
+    });
+
+    const recipients: string[] = [];
+    if (client?.email) recipients.push(client.email);
+
+    // Generate in-memory PDF Buffer for attachment
+    let pdfAttachment: any;
+    try {
+      const pdfBuffer = await generateQuotationPdfBuffer(data);
+      pdfAttachment = {
+        filename: `Quotation-${data.quoteNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      logger.error(
+        { err: pdfErr, quoteNumber: data.quoteNumber },
+        'Failed to generate in-memory quotation PDF attachment',
+      );
+    }
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.QUOTATION_SENT,
+        recipients,
+        {
+          quoteNumber: data.quoteNumber,
+          quoteTotal: data.total,
+          validUntil: data.validUntil ? new Date(data.validUntil).toLocaleDateString() : 'N/A',
+          clientName: client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/quotations/${data.id}`,
+          actionText: 'View Quotation',
+        },
+        {
+          sendEmail: true,
+          priority: 'HIGH',
+          emailOptions: {
+            attachments: pdfAttachment ? [pdfAttachment] : undefined,
+          },
+        },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Quotation Sent notification'));
+
     return ok(res, 'Quotation marked as sent', data);
   },
 
   async approveQuotation(req: Request, res: Response) {
     const data = await financeRepository.setQuotationStatus(req.params.id!, 'ACCEPTED', req.user);
     if (!data) throw notFound('Quotation not found');
+
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { email: true, companyName: true },
+    });
+
+    const recipients: string[] = [data.createdBy];
+    if (client?.email) recipients.push(client.email);
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.QUOTATION_APPROVED,
+        recipients,
+        {
+          quoteNumber: data.quoteNumber,
+          quoteTotal: data.total,
+          clientName: client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/quotations/${data.id}`,
+          actionText: 'View Approved Quotation',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Quotation Approved notification'));
+
     return ok(res, 'Quotation approved successfully', data);
   },
 
@@ -87,7 +187,88 @@ export const financeController = {
   async sendInvoice(req: Request, res: Response) {
     const data = await financeRepository.setInvoiceStatus(req.params.id!, 'SENT', req.user);
     if (!data) throw notFound('Invoice not found');
+
+    const client = await prisma.client.findUnique({
+      where: { id: data.clientId },
+      select: { email: true, companyName: true },
+    });
+
+    const recipients: string[] = [];
+    if (client?.email) recipients.push(client.email);
+
+    // Generate in-memory PDF Buffer for attachment
+    let pdfAttachment: any;
+    try {
+      const pdfBuffer = await generateInvoicePdfBuffer(data);
+      pdfAttachment = {
+        filename: `Invoice-${data.invoiceNumber}.pdf`,
+        content: pdfBuffer,
+        contentType: 'application/pdf',
+      };
+    } catch (pdfErr) {
+      logger.error(
+        { err: pdfErr, invoiceNumber: data.invoiceNumber },
+        'Failed to generate in-memory invoice PDF attachment',
+      );
+    }
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.INVOICE_SENT,
+        recipients,
+        {
+          invoiceNumber: data.invoiceNumber,
+          invoiceTotal: data.total,
+          balanceDue: data.balanceDue,
+          dueDate: data.dueDate ? new Date(data.dueDate).toLocaleDateString() : 'N/A',
+          clientName: client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/invoices/${data.id}`,
+          actionText: 'View Invoice',
+        },
+        {
+          sendEmail: true,
+          priority: 'HIGH',
+          emailOptions: {
+            attachments: pdfAttachment ? [pdfAttachment] : undefined,
+          },
+        },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Invoice Sent notification'));
+
     return ok(res, 'Invoice marked as sent', data);
+  },
+
+  async sendPaymentReminder(req: Request, res: Response) {
+    const invoices = await financeRepository.listInvoices(req.user!, {});
+    const invoice = invoices.find((item) => item.id === req.params.id);
+    if (!invoice) throw notFound('Invoice not found');
+
+    const client = await prisma.client.findUnique({
+      where: { id: invoice.clientId },
+      select: { email: true, companyName: true },
+    });
+
+    const recipients: string[] = [];
+    if (client?.email) recipients.push(client.email);
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.PAYMENT_REMINDER,
+        recipients,
+        {
+          invoiceNumber: invoice.invoiceNumber,
+          invoiceTotal: invoice.total,
+          balanceDue: invoice.balanceDue,
+          dueDate: invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : 'N/A',
+          clientName: client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/invoices/${invoice.id}`,
+          actionText: 'Pay Invoice Now',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Payment Reminder notification'));
+
+    return ok(res, 'Payment reminder dispatched successfully');
   },
 
   async reviseInvoice(req: Request, res: Response) {
@@ -135,6 +316,53 @@ export const financeController = {
   async createPayment(req: Request, res: Response) {
     const data = await financeRepository.createPayment(req.user!.id, req.body);
     if (!data) throw notFound('Invoice not found');
+
+    // Fetch related invoice and client details
+    const invoice = await prisma.invoice.findUnique({
+      where: { id: data.invoiceId },
+      include: { client: true },
+    });
+
+    const recipients: string[] = [req.user!.id];
+    if (invoice?.client?.email) recipients.push(invoice.client.email);
+
+    // Dispatch Payment Received Notification
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.PAYMENT_RECEIVED,
+        recipients,
+        {
+          invoiceNumber: invoice?.invoiceNumber || '',
+          amountPaid: data.amount,
+          balanceDue: invoice?.balanceDue || 0,
+          clientName: invoice?.client?.companyName || 'Client',
+          actionUrl: `http://localhost:5173/finance/invoices/${invoice?.id}`,
+          actionText: 'View Payment Receipt',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Payment Received notification'));
+
+    // If invoice is fully paid, dispatch Invoice Paid Notification
+    if (invoice && (invoice.balanceDue <= 0 || invoice.status === 'PAID')) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.INVOICE_PAID,
+          recipients,
+          {
+            invoiceNumber: invoice.invoiceNumber,
+            invoiceTotal: invoice.total,
+            amountPaid: invoice.amountPaid,
+            balanceDue: 0,
+            clientName: invoice.client.companyName,
+            actionUrl: `http://localhost:5173/finance/invoices/${invoice.id}`,
+            actionText: 'View Paid Invoice',
+          },
+          { sendEmail: true, priority: 'HIGH' },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch Invoice Paid notification'));
+    }
+
     return ok(res, 'Payment recorded successfully', data, 201);
   },
 

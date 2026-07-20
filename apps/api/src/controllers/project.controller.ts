@@ -7,6 +7,8 @@ import { ok } from '../utils/http';
 import { AppError, forbidden, notFound } from '../utils/errors';
 import type { ProjectRole } from '@clientflow/types';
 import { projectRoleLabels } from '@clientflow/shared';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
 import fs from 'fs';
 import path from 'path';
 
@@ -131,6 +133,49 @@ export const projectController = {
       `Project "${project.projectName}" was created under client ${clientExists.companyName}`,
     );
 
+    // Trigger Notification for Project Created
+    const recipients: string[] = [project.projectManagerId];
+    if (clientExists.email) recipients.push(clientExists.email);
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.PROJECT_CREATED,
+        recipients,
+        {
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          clientName: clientExists.companyName,
+          actionUrl: `http://localhost:5173/projects/${project.id}`,
+          actionText: 'View Project Details',
+        },
+        { sendEmail: true },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Project Created notification'));
+
+    // Trigger Notifications for Assigned Team Members
+    if (Array.isArray(projectMembers)) {
+      for (const m of projectMembers) {
+        if (m.userId && m.userId !== project.projectManagerId) {
+          await notificationService
+            .notifyEvent(
+              NotificationEvents.PROJECT_ASSIGNED,
+              [m.userId],
+              {
+                projectName: project.projectName,
+                projectCode: project.projectCode,
+                projectRole: projectRoleLabels[m.projectRole as ProjectRole] || m.projectRole,
+                actionUrl: `http://localhost:5173/projects/${project.id}`,
+                actionText: 'View Project Workspace',
+              },
+              { sendEmail: true },
+            )
+            .catch((err) =>
+              logger.error({ err }, 'Failed to dispatch Project Assigned notification'),
+            );
+        }
+      }
+    }
+
     const createdProject = await projectRepository.findById(project.id, user);
     return ok(res, 'Project created successfully', createdProject, 201);
   },
@@ -196,6 +241,9 @@ export const projectController = {
     }
 
     const updated = await projectRepository.update(id, updateData);
+    if (!updated) {
+      throw notFound('Project not found');
+    }
 
     if (user.role === 'ADMIN' && body.projectManagerId !== undefined) {
       await projectRepository.addProjectMember(
@@ -207,6 +255,47 @@ export const projectController = {
     }
 
     await projectActivityService.log(id, 'PROJECT_UPDATED', `Project details were updated`);
+
+    // Status notifications (COMPLETED / CANCELLED)
+    if (body.status && body.status !== project.status) {
+      const memberUserIds = (project.projectMembers || []).map((m) => m.userId);
+      const recipients: string[] = [...new Set([project.projectManagerId, ...memberUserIds])];
+      if (project.client?.email) recipients.push(project.client.email);
+
+      if (body.status === 'COMPLETED') {
+        await notificationService
+          .notifyEvent(
+            NotificationEvents.PROJECT_COMPLETED,
+            recipients,
+            {
+              projectName: updated.projectName,
+              projectCode: updated.projectCode,
+              actionUrl: `http://localhost:5173/projects/${updated.id}`,
+              actionText: 'View Completed Project',
+            },
+            { sendEmail: true, priority: 'HIGH' },
+          )
+          .catch((err) =>
+            logger.error({ err }, 'Failed to dispatch Project Completed notification'),
+          );
+      } else if (body.status === 'CANCELLED') {
+        await notificationService
+          .notifyEvent(
+            NotificationEvents.PROJECT_CANCELLED,
+            recipients,
+            {
+              projectName: updated.projectName,
+              projectCode: updated.projectCode,
+              actionUrl: `http://localhost:5173/projects/${updated.id}`,
+              actionText: 'View Project',
+            },
+            { sendEmail: true },
+          )
+          .catch((err) =>
+            logger.error({ err }, 'Failed to dispatch Project Cancelled notification'),
+          );
+      }
+    }
 
     return ok(res, 'Project updated successfully', updated);
   },
@@ -297,6 +386,22 @@ export const projectController = {
       'MEMBER_ADDED',
       `Team member ${member.user?.firstName} ${member.user?.lastName} was added as ${projectRoleLabels[projectRole]}`,
     );
+
+    // Notify assigned member
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.PROJECT_ASSIGNED,
+        [userId],
+        {
+          projectName: project.projectName,
+          projectCode: project.projectCode,
+          projectRole: projectRoleLabels[projectRole] || projectRole,
+          actionUrl: `http://localhost:5173/projects/${project.id}`,
+          actionText: 'View Project Workspace',
+        },
+        { sendEmail: true },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Project Assigned notification'));
 
     return ok(res, 'Team member added successfully', member);
   },

@@ -1,20 +1,19 @@
 import bcrypt from 'bcrypt';
 import type { AuthUser } from '@clientflow/types';
-import {
-  forgotPasswordSchema,
-  loginSchema,
-  resetPasswordSchema,
-} from '@clientflow/shared';
+import { forgotPasswordSchema, loginSchema, resetPasswordSchema } from '@clientflow/shared';
 import type { z } from 'zod';
 import { userRepository } from '../repositories/user.repository';
 import { tokenRepository } from '../repositories/token.repository';
 import { AppError, unauthorized } from '../utils/errors';
 import { createOpaqueToken, hashToken, signAccessToken } from '../utils/tokens';
+import { notificationService, NotificationEvents } from './notification.service';
 import { logger } from '../utils/logger';
 
 const resetTokenMinutes = 30;
 
-function toAuthUser(user: Awaited<ReturnType<typeof userRepository.findByEmailWithPassword>>): AuthUser {
+function toAuthUser(
+  user: Awaited<ReturnType<typeof userRepository.findByEmailWithPassword>>,
+): AuthUser {
   if (!user) {
     throw unauthorized();
   }
@@ -97,6 +96,24 @@ export const authService = {
       new Date(Date.now() + resetTokenMinutes * 60 * 1000),
     );
     logger.info({ userId: user.id }, 'Password reset requested');
+
+    // Trigger Notification for Password Reset
+    const resetUrl = `http://localhost:5173/reset-password?token=${resetToken}`;
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.AUTH_PASSWORD_RESET,
+        [user.id],
+        {
+          recipientName: `${user.firstName} ${user.lastName}`,
+          userEmail: user.email,
+          resetLink: resetUrl,
+          actionUrl: resetUrl,
+          actionText: 'Reset Password',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch password reset notification'));
+
     return { resetToken };
   },
 
@@ -109,5 +126,18 @@ export const authService = {
     await userRepository.update(record.userId, { password: await bcrypt.hash(input.password, 12) });
     await tokenRepository.markResetUsed(tokenHash);
     await tokenRepository.revokeAllForUser(record.userId);
+
+    // Trigger Notification for Password Changed
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.AUTH_PASSWORD_CHANGED,
+        [record.userId],
+        {
+          recipientName: `${record.user.firstName} ${record.user.lastName}`,
+          userEmail: record.user.email,
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch password changed notification'));
   },
 };

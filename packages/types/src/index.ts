@@ -576,3 +576,114 @@ export interface RecurringService {
   createdAt: string | Date;
   updatedAt: string | Date;
 }
+
+export type NotificationType = 'INFO' | 'SUCCESS' | 'WARNING' | 'ERROR' | 'SYSTEM';
+export type NotificationPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'CRITICAL';
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  event: string;
+  title: string;
+  message: string;
+  data?: Record<string, any> | null;
+  priority: NotificationPriority;
+  status: string;
+  createdBy?: string | null;
+  createdByUser?: AuthUser | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+  recipients?: NotificationRecipient[];
+}
+
+export interface NotificationRecipient {
+  id: string;
+  notificationId: string;
+  notification?: Notification;
+  userId: string;
+  user?: AuthUser;
+  isRead: boolean;
+  readAt?: string | Date | null;
+  isArchived: boolean;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface EmailLog {
+  id: string;
+  recipient: string;
+  subject: string;
+  provider: string;
+  status: 'SENT' | 'FAILED';
+  error?: string | null;
+  sentAt?: string | Date | null;
+  attempts: number;
+  messageId?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface NotificationPreference {
+  id: string;
+  userId: string;
+  emailEnabled: boolean;
+  inAppEnabled: boolean;
+  pushEnabled: boolean;
+  smsEnabled: boolean;
+  language: string;
+  timezone: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface EmailAttachment {
+  filename: string;
+  content?: Buffer | string | undefined;
+  path?: string | undefined;
+  contentType?: string | undefined;
+}
+
+export interface SendEmailOptions {
+  to: string;
+  subject: string;
+  html?: string | undefined;
+  text?: string | undefined;
+  fromName?: string | undefined;
+  fromEmail?: string | undefined;
+  attachments?: EmailAttachment[] | undefined;
+}
+
+export interface SendEmailResult {
+  success: boolean;
+  messageId?: string | undefined;
+  error?: string | undefined;
+  provider: string;
+}
+
+export interface NotifyPayload {
+  event: string;
+  title: string;
+  message: string;
+  type?: NotificationType | undefined;
+  priority?: NotificationPriority | undefined;
+  data?: Record<string, any> | undefined;
+  recipients: string[]; // User IDs or emails
+  createdBy?: string | undefined;
+  sendEmail?: boolean | undefined;
+  emailOptions?:
+    | {
+        subject?: string | undefined;
+        html?: string | undefined;
+        text?: string | undefined;
+        attachments?: EmailAttachment[] | undefined;
+      }
+    | undefined;
+}
+
+export interface NotifyResult {
+  success: boolean;
+  notificationId?: string | undefined;
+  recipientCount: number;
+  emailLogs?: SendEmailResult[] | undefined;
+  errors?: string[] | undefined;
+}

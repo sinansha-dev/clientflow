@@ -1,12 +1,15 @@
 import PDFDocument from 'pdfkit';
 import type { Response } from 'express';
+import { PassThrough } from 'node:stream';
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   generateQuotationPdf
-   Produces a professional multi-page A4 commercial proposal PDF.
-   All company details are read from environment variables with sensible defaults.
+   generateQuotationPdfToStream
+   Produces a professional multi-page A4 commercial proposal PDF to any stream.
 ───────────────────────────────────────────────────────────────────────────── */
-export async function generateQuotationPdf(q: any, res: Response): Promise<void> {
+export async function generateQuotationPdfToStream(
+  q: any,
+  stream: NodeJS.WritableStream,
+): Promise<void> {
   // ── Document ───────────────────────────────────────────────────────────────
   const doc = new PDFDocument({
     margin: 0,
@@ -20,7 +23,7 @@ export async function generateQuotationPdf(q: any, res: Response): Promise<void>
       Keywords: 'quotation, proposal, invoice',
     },
   });
-  doc.pipe(res);
+  doc.pipe(stream);
 
   // ── Design Tokens ──────────────────────────────────────────────────────────
   const C = {
@@ -875,4 +878,19 @@ export async function generateQuotationPdf(q: any, res: Response): Promise<void>
   }
 
   doc.end();
+}
+
+export async function generateQuotationPdf(q: any, res: Response): Promise<void> {
+  return generateQuotationPdfToStream(q, res);
+}
+
+export async function generateQuotationPdfBuffer(q: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const passThrough = new PassThrough();
+    passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
+    passThrough.on('end', () => resolve(Buffer.concat(chunks)));
+    passThrough.on('error', (err: Error) => reject(err));
+    generateQuotationPdfToStream(q, passThrough).catch(reject);
+  });
 }

@@ -1,12 +1,15 @@
 import PDFDocument from 'pdfkit';
 import type { Response } from 'express';
+import { PassThrough } from 'node:stream';
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   generateInvoicePdf
-   Produces a professional multi-page A4 invoice proposal/bill PDF.
-   Branding is consistent with the quotation proposal layout.
+   generateInvoicePdfToStream
+   Produces a professional multi-page A4 invoice proposal/bill PDF to any stream.
 ───────────────────────────────────────────────────────────────────────────── */
-export async function generateInvoicePdf(inv: any, res: Response): Promise<void> {
+export async function generateInvoicePdfToStream(
+  inv: any,
+  stream: NodeJS.WritableStream,
+): Promise<void> {
   // ── Document ───────────────────────────────────────────────────────────────
   const doc = new PDFDocument({
     margin: 0,
@@ -20,7 +23,7 @@ export async function generateInvoicePdf(inv: any, res: Response): Promise<void>
       Keywords: 'invoice, billing, payment',
     },
   });
-  doc.pipe(res);
+  doc.pipe(stream);
 
   // ── Design Tokens ──────────────────────────────────────────────────────────
   const C = {
@@ -182,7 +185,11 @@ export async function generateInvoicePdf(inv: any, res: Response): Promise<void>
     .font('Helvetica-Bold')
     .fontSize(7.5)
     .fillColor(sFg)
-    .text(inv.status.replace('_', ' '), bX, 58, { width: bW, align: 'center', lineBreak: false });
+    .text((inv.status || 'DRAFT').replace('_', ' '), bX, 58, {
+      width: bW,
+      align: 'center',
+      lineBreak: false,
+    });
 
   const creatorName = inv.creator
     ? `${inv.creator.firstName || ''} ${inv.creator.lastName || ''}`.trim()
@@ -800,4 +807,19 @@ export async function generateInvoicePdf(inv: any, res: Response): Promise<void>
   }
 
   doc.end();
+}
+
+export async function generateInvoicePdf(inv: any, res: Response): Promise<void> {
+  return generateInvoicePdfToStream(inv, res);
+}
+
+export async function generateInvoicePdfBuffer(inv: any): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const passThrough = new PassThrough();
+    passThrough.on('data', (chunk: Buffer) => chunks.push(chunk));
+    passThrough.on('end', () => resolve(Buffer.concat(chunks)));
+    passThrough.on('error', (err: Error) => reject(err));
+    generateInvoicePdfToStream(inv, passThrough).catch(reject);
+  });
 }

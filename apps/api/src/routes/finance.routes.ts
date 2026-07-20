@@ -187,6 +187,12 @@ invoiceRoutes.post(
   (req, res, next) => financeController.sendInvoice(req, res).catch(next),
 );
 invoiceRoutes.post(
+  '/:id/remind',
+  requireRole('ADMIN', 'STAFF'),
+  validate(idParams, 'params'),
+  (req, res, next) => financeController.sendPaymentReminder(req, res).catch(next),
+);
+invoiceRoutes.post(
   '/:id/revise',
   requireRole('ADMIN'),
   validate(idParams, 'params'),

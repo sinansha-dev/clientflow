@@ -66,6 +66,9 @@ model User {
   recordedPayments            Payment[]            @relation("PaymentRecorder")
   recordedExpenses            Expense[]            @relation("ExpenseRecorder")
   invoiceActivities           InvoiceActivity[]    @relation("InvoiceUserActivities")
+  createdNotifications        Notification[]       @relation("NotificationCreator")
+  notifications               NotificationRecipient[] @relation("UserNotifications")
+  notificationPreference      NotificationPreference?
   // Workforce Management fields (Phase 5)
   employeeId                  String?
   jobTitle                    String?
@@ -967,3 +970,91 @@ model InvoiceActivity {
   @@index([invoiceId])
   @@index([userId])
 }
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  SYSTEM
+}
+
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+model Notification {
+  id            String                @id @default(uuid()) @db.Uuid
+  type          NotificationType      @default(INFO)
+  event         String
+  title         String
+  message       String
+  data          Json?
+  priority      NotificationPriority  @default(NORMAL)
+  status        String                @default("PROCESSED") // PENDING, PROCESSED, FAILED, PARTIAL
+  createdBy     String?               @db.Uuid
+  createdByUser User?                 @relation("NotificationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  recipients    NotificationRecipient[]
+
+  @@index([event])
+  @@index([type])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model NotificationRecipient {
+  id             String       @id @default(uuid()) @db.Uuid
+  notificationId String       @db.Uuid
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation("UserNotifications", fields: [userId], references: [id], onDelete: Cascade)
+  isRead         Boolean      @default(false)
+  readAt         DateTime?
+  isArchived     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([notificationId])
+  @@index([userId, isRead])
+  @@index([userId, isArchived])
+}
+
+model EmailLog {
+  id        String    @id @default(uuid()) @db.Uuid
+  recipient String
+  subject   String
+  provider  String
+  status    String    // SENT, FAILED
+  error     String?
+  sentAt    DateTime?
+  attempts  Int       @default(1)
+  messageId String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([recipient])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model NotificationPreference {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emailEnabled Boolean  @default(true)
+  inAppEnabled Boolean  @default(true)
+  pushEnabled  Boolean  @default(true)
+  smsEnabled   Boolean  @default(false)
+  language     String   @default("en")
+  timezone     String   @default("UTC")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+

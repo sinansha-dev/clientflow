@@ -5,6 +5,8 @@ import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
 import { AuthorizationService } from '../services/authorization.service';
 import { prisma } from '../config/prisma';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
 
 export const meetingController = {
   // --- Meeting Controllers ---
@@ -73,6 +75,25 @@ export const meetingController = {
       organizerId: user.id,
     });
 
+    // Resolve participants for Meeting Scheduled notification
+    const participantUserIds: string[] = (meeting.participants || []).map((p: any) => p.userId);
+    const recipients = [...new Set([user.id, ...participantUserIds])];
+
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.MEETING_SCHEDULED,
+        recipients,
+        {
+          meetingTitle: meeting.title,
+          meetingDate: `${new Date(meeting.startTime).toLocaleString()} - ${new Date(meeting.endTime).toLocaleTimeString()}`,
+          meetingLink: meeting.meetingLink,
+          actionUrl: meeting.meetingLink || `http://localhost:5173/meetings/${meeting.id}`,
+          actionText: 'Join Meeting',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Meeting Scheduled notification'));
+
     return ok(res, 'Meeting scheduled successfully', meeting, 201);
   },
 
@@ -109,7 +130,25 @@ export const meetingController = {
       throw forbidden('Only the organizer, Project Manager, or an Admin can cancel this meeting');
     }
 
+    // Resolve recipients before deletion
+    const participantUserIds: string[] = (meeting.participants || []).map((p: any) => p.userId);
+    const recipients = [...new Set([meeting.organizerId, ...participantUserIds])];
+
     await meetingRepository.delete(id);
+
+    // Trigger Notification for Meeting Cancelled
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.MEETING_CANCELLED,
+        recipients,
+        {
+          meetingTitle: meeting.title,
+          meetingDate: new Date(meeting.startTime).toLocaleString(),
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Meeting Cancelled notification'));
+
     return ok(res, 'Meeting cancelled successfully');
   },
 

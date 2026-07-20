@@ -6,6 +6,8 @@ import { activityService } from '../services/activity.service';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
 import fs from 'fs';
 import path from 'path';
 
@@ -77,6 +79,23 @@ export const clientController = {
       `Client company ${client.companyName} was created`,
     );
 
+    // Notify assigned manager if present (Lead Assigned notification)
+    if (client.assignedManagerId) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.CRM_LEAD_ASSIGNED,
+          [client.assignedManagerId],
+          {
+            clientName: client.companyName,
+            industry: client.industry,
+            actionUrl: `http://localhost:5173/clients/${client.id}`,
+            actionText: 'View Lead Details',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch CRM lead assigned notification'));
+    }
+
     // Fetch the client with its contacts and details
     const createdClient = await clientRepository.findById(client.id, user);
     return ok(res, 'Client created successfully', createdClient, 201);
@@ -134,6 +153,22 @@ export const clientController = {
       'PORTAL_ACCESS_CREATED',
       `Portal login enabled for ${firstName} ${lastName}`,
     );
+
+    // Notify Client Portal Invitation
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.CRM_CLIENT_INVITATION,
+        [user.id, email],
+        {
+          recipientName: `${firstName} ${lastName}`,
+          userEmail: email,
+          companyName: client.companyName,
+          actionUrl: 'http://localhost:5173/login',
+          actionText: 'Access Portal Login',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch Client Invitation notification'));
 
     return ok(
       res,
@@ -203,6 +238,66 @@ export const clientController = {
 
     const updated = await clientRepository.update(id, updateData);
     await activityService.log(id, 'CLIENT_UPDATED', `Client company details were updated`);
+
+    // Dynamic recipients: Manager ID and Client Email
+    const recipients: string[] = [];
+    if (updated.assignedManagerId) recipients.push(updated.assignedManagerId);
+    if (updated.email) recipients.push(updated.email);
+
+    // Lead Reassigned notification
+    if (body.assignedManagerId && body.assignedManagerId !== client.assignedManagerId) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.CRM_LEAD_ASSIGNED,
+          [body.assignedManagerId],
+          {
+            clientName: updated.companyName,
+            industry: updated.industry,
+            actionUrl: `http://localhost:5173/clients/${updated.id}`,
+            actionText: 'View Lead Details',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch CRM lead assigned notification'));
+    }
+
+    // Status updated & Lead converted notifications
+    if (body.status && body.status !== client.status && recipients.length > 0) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.CRM_CLIENT_STATUS_UPDATED,
+          recipients,
+          {
+            clientName: updated.companyName,
+            status: updated.status,
+            actionUrl: `http://localhost:5173/clients/${updated.id}`,
+            actionText: 'View Client Details',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) =>
+          logger.error({ err }, 'Failed to dispatch Client Status Updated notification'),
+        );
+
+      if (
+        ['ACTIVE', 'CLIENT'].includes(updated.status.toUpperCase()) &&
+        ['LEAD', 'PROSPECT'].includes(client.status.toUpperCase())
+      ) {
+        await notificationService
+          .notifyEvent(
+            NotificationEvents.CRM_LEAD_CONVERTED,
+            recipients,
+            {
+              clientName: updated.companyName,
+              status: updated.status,
+              actionUrl: `http://localhost:5173/clients/${updated.id}`,
+              actionText: 'View Converted Client',
+            },
+            { sendEmail: true, priority: 'HIGH' },
+          )
+          .catch((err) => logger.error({ err }, 'Failed to dispatch Lead Converted notification'));
+      }
+    }
 
     return ok(res, 'Client updated successfully', updated);
   },

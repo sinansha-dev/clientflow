@@ -5,6 +5,8 @@ import { taskActivityService } from '../services/task-activity.service';
 import { AuthorizationService } from '../services/authorization.service';
 import { ok } from '../utils/http';
 import { AppError, forbidden, notFound } from '../utils/errors';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
 import fs from 'fs';
 import path from 'path';
 
@@ -110,6 +112,26 @@ export const taskController = {
     const task = await taskRepository.create(taskData);
     await taskActivityService.log(task.id, 'TASK_CREATED', `Task "${task.title}" was created`);
 
+    // Trigger Notification for Task Assigned
+    if (assigneeIds.length > 0) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.TASK_ASSIGNED,
+          assigneeIds,
+          {
+            taskTitle: task.title,
+            taskStatus: task.status,
+            taskPriority: task.priority,
+            projectName: project.projectName,
+            dueDate: task.dueDate ? new Date(task.dueDate).toLocaleDateString() : undefined,
+            actionUrl: `http://localhost:5173/tasks/${task.id}`,
+            actionText: 'View Assigned Task',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch Task Assigned notification'));
+    }
+
     const createdTask = await taskRepository.findById(task.id, user);
     return ok(res, 'Task created successfully', createdTask, 201);
   },
@@ -169,6 +191,45 @@ export const taskController = {
     }
 
     const result = await taskRepository.findById(id, user);
+
+    // Trigger Notifications for Task Update / Completion
+    const assigneeIds = (task.assignees ?? []).map((a: { id: string }) => a.id);
+    const recipients = [...new Set([task.createdBy, ...assigneeIds])];
+
+    if (body.status && ['DONE', 'COMPLETED'].includes(body.status.toUpperCase())) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.TASK_COMPLETED,
+          recipients,
+          {
+            taskTitle: task.title,
+            taskStatus: body.status,
+            taskPriority: task.priority,
+            projectName: task.project?.projectName,
+            actionUrl: `http://localhost:5173/tasks/${task.id}`,
+            actionText: 'View Completed Task',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch Task Completed notification'));
+    } else if (Object.keys(body).length > 0) {
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.TASK_UPDATED,
+          recipients,
+          {
+            taskTitle: task.title,
+            taskStatus: body.status || task.status,
+            taskPriority: body.priority || task.priority,
+            projectName: task.project?.projectName,
+            actionUrl: `http://localhost:5173/tasks/${task.id}`,
+            actionText: 'View Updated Task',
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch Task Updated notification'));
+    }
+
     return ok(res, 'Task updated successfully', result);
   },
 

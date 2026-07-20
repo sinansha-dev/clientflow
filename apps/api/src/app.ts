@@ -32,6 +32,7 @@ import {
   recurringServiceRoutes,
 } from './routes/finance.routes';
 import { searchRoutes } from './routes/search.routes';
+import { notificationRoutes } from './routes/notification.routes';
 import { errorMiddleware } from './middleware/error';
 import { requestLogger } from './middleware/request-logger';
 
@@ -88,6 +89,7 @@ app.use('/reports', financeReportRoutes);
 app.use('/billing-plans', billingPlanRoutes);
 app.use('/recurring-services', recurringServiceRoutes);
 app.use('/search', searchRoutes);
+app.use('/notifications', notificationRoutes);
 
 app.use((_req, res) => {
   res.status(404).json({ success: false, message: 'Route not found', errors: [] });

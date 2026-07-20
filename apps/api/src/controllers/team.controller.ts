@@ -4,6 +4,8 @@ import { teamRepository } from '../repositories/team.repository';
 import { ok } from '../utils/http';
 import { forbidden, notFound } from '../utils/errors';
 import { prisma } from '../config/prisma';
+import { notificationService, NotificationEvents } from '../services/notification.service';
+import { logger } from '../utils/logger';
 
 export const teamController = {
   async create(req: Request, res: Response) {
@@ -52,6 +54,22 @@ export const teamController = {
       },
     });
 
+    // Send Welcome Email Notification to newly created member
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.AUTH_WELCOME,
+        [member.id],
+        {
+          recipientName: `${member.firstName} ${member.lastName}`,
+          userEmail: member.email,
+          role: member.role,
+        },
+        { sendEmail: true },
+      )
+      .catch((err) =>
+        logger.error({ err }, 'Failed to dispatch welcome notification for team member'),
+      );
+
     return ok(res, 'Team member manually created successfully', member, 201);
   },
 
@@ -90,7 +108,6 @@ export const teamController = {
     const id = req.params.id!;
     const body = req.body;
 
-    // Check permissions: Admin can edit anyone. Staff members/Staff can only edit themselves.
     if (user.role !== 'ADMIN' && user.id !== id) {
       throw forbidden('You cannot edit another team member profile');
     }
@@ -121,10 +138,39 @@ export const teamController = {
     const id = req.params.id!;
     const { status } = req.body; // ACTIVE or INACTIVE
 
+    const member = await teamRepository.findById(id);
+    if (!member) {
+      throw notFound('Team member profile not found');
+    }
+
     if (status === 'INACTIVE') {
       await teamRepository.deactivate(id);
+      // Trigger Account Locked Notification
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.AUTH_ACCOUNT_LOCKED,
+          [id],
+          {
+            recipientName: `${member.firstName} ${member.lastName}`,
+            userEmail: member.email,
+          },
+          { sendEmail: true, priority: 'HIGH' },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch account locked notification'));
     } else {
       await teamRepository.activate(id);
+      // Trigger Account Activated Notification
+      await notificationService
+        .notifyEvent(
+          NotificationEvents.AUTH_ACCOUNT_ACTIVATED,
+          [id],
+          {
+            recipientName: `${member.firstName} ${member.lastName}`,
+            userEmail: member.email,
+          },
+          { sendEmail: true },
+        )
+        .catch((err) => logger.error({ err }, 'Failed to dispatch account activated notification'));
     }
 
     return ok(res, 'Team member profile status updated successfully');
@@ -145,13 +191,25 @@ export const teamController = {
       data: { password: hashedPassword, status: 'ACTIVE' },
     });
 
+    // Trigger Password Changed Notification
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.AUTH_PASSWORD_CHANGED,
+        [id],
+        {
+          recipientName: `${member.firstName} ${member.lastName}`,
+          userEmail: member.email,
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch password changed notification'));
+
     return ok(res, 'Team member password reset successfully');
   },
 
   async invite(req: Request, res: Response) {
     const { email, role, firstName, lastName, jobTitle, department } = req.body;
 
-    // Simulate sending invitation email
     const exists = await prisma.user.findUnique({ where: { email } });
     if (exists) {
       return res
@@ -159,15 +217,32 @@ export const teamController = {
         .json({ success: false, message: 'Email address is already registered' });
     }
 
-    // In a real application, we would create a temporary invitation record and email a token.
-    // For this build, we return the details as mock verification.
+    const invitationLink = `http://localhost:5173/register?email=${encodeURIComponent(email)}&role=${role || 'STAFF'}`;
+
+    // Dispatch Invitation Email Notification through NotificationService
+    await notificationService
+      .notifyEvent(
+        NotificationEvents.AUTH_USER_INVITED,
+        [email],
+        {
+          recipientName: firstName ? `${firstName} ${lastName || ''}`.trim() : email,
+          userEmail: email,
+          role: role || 'STAFF',
+          inviteLink: invitationLink,
+          actionUrl: invitationLink,
+          actionText: 'Accept Invitation',
+        },
+        { sendEmail: true, priority: 'HIGH' },
+      )
+      .catch((err) => logger.error({ err }, 'Failed to dispatch user invitation notification'));
+
     return ok(
       res,
-      'Invitation logged and sent successfully (Simulated)',
+      'Invitation logged and sent successfully',
       {
         email,
-        role,
-        invitationLink: `http://localhost:5173/register?email=${encodeURIComponent(email)}&role=${role}`,
+        role: role || 'STAFF',
+        invitationLink,
       },
       201,
     );
