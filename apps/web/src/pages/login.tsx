@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { loginSchema } from '@clientflow/shared';
 import { useForm } from 'react-hook-form';
@@ -18,13 +19,28 @@ export function LoginPage() {
   const location = useLocation();
   const { setSession } = useAuthStore();
   const notify = useToastStore((state) => state.notify);
+
   const form = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: 'admin@clientflow.local', password: 'Admin123!', rememberMe: true },
+    defaultValues: { email: '', password: '', rememberMe: false },
   });
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('cf_remembered_email');
+    if (savedEmail) {
+      form.setValue('email', savedEmail);
+      form.setValue('rememberMe', true);
+    }
+  }, [form]);
 
   const onSubmit = form.handleSubmit(async (values) => {
     try {
+      if (values.rememberMe) {
+        localStorage.setItem('cf_remembered_email', values.email);
+      } else {
+        localStorage.removeItem('cf_remembered_email');
+      }
+
       const response = await api.post('/auth/login', values);
       setSession(response.data.data.user, response.data.data.accessToken);
       notify({ type: 'success', title: 'Welcome back' });

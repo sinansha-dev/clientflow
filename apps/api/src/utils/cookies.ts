@@ -4,13 +4,14 @@ import { env, isProduction } from '../config/env';
 export const accessCookieName = 'cf_access';
 export const refreshCookieName = 'cf_refresh';
 
-const allowSecureCookie =
-  isProduction || env.WEB_ORIGIN.includes('localhost') || env.WEB_ORIGIN.includes('127.0.0.1');
+const isHttps = env.WEB_ORIGIN.startsWith('https://');
+const allowSecureCookie = isProduction || isHttps;
+const sameSitePolicy = isHttps || isProduction ? ('none' as const) : ('lax' as const);
 
 const baseCookie = {
   httpOnly: true,
   secure: allowSecureCookie,
-  sameSite: 'none' as const,
+  sameSite: sameSitePolicy,
   signed: true,
   path: '/',
 };

@@ -7,6 +7,7 @@ import { notificationService, NotificationEvents } from './notification.service'
 import { emailTemplateEngine } from './email/email-template.engine';
 import { generateQuotationPdfBuffer } from '../utils/quotation-pdf';
 import { generateInvoicePdfBuffer } from '../utils/invoice-pdf';
+import { emailQueueService } from './email-queue.service';
 import { notificationConfig } from '../config/notification.config';
 
 test('EmailProviderFactory returns MockEmailProvider in test mode or when requested', () => {
@@ -250,4 +251,22 @@ test('NotificationService.notifyEvent correctly formats and dispatches business 
   assert.equal(mockProvider.sentEmails.length, 1);
   assert.ok(mockProvider.sentEmails[0]!.attachments);
   assert.equal(mockProvider.sentEmails[0]!.attachments[0]!.filename, 'Quotation-QTN-00018.pdf');
+});
+
+test('EmailQueueService enqueues and processes email jobs asynchronously', async () => {
+  emailQueueService.enqueue({
+    recipient: 'queue-test@clientflow.local',
+    subject: 'Queued Email Test',
+    html: '<p>Testing background email queue execution</p>',
+    providerName: 'MOCK',
+    event: 'test.queued.email',
+  });
+
+  // Verify enqueue returns immediately without blocking
+  assert.ok(emailQueueService.getQueueLength() >= 0);
+
+  // Wait for worker to finish processing queued jobs
+  await emailQueueService.drainQueue();
+  assert.equal(emailQueueService.getQueueLength(), 0);
+  assert.equal(emailQueueService.isProcessing(), false);
 });

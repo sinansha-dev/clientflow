@@ -28,7 +28,23 @@ import {
   EyeOff,
   Bell,
   CheckCircle,
+  User,
+  Handshake,
+  Folder,
+  Receipt,
+  ScrollText,
+  CheckSquare,
+  Wrench,
+  XCircle,
+  Info,
+  ExternalLink,
 } from 'lucide-react';
+import {
+  formatRelativeTime,
+  getNotificationIconDetails,
+  getNotificationActionUrl,
+  type NotificationRecipientItem,
+} from '../stores/notification-store';
 
 type DashboardDensity = 'comfortable' | 'compact';
 
@@ -129,15 +145,19 @@ export function DashboardPage() {
     'upcoming',
   );
 
+  // Notifications list state
+  const [notificationsList, setNotificationsList] = useState<NotificationRecipientItem[]>([]);
+
   const fetchDashboardStats = useCallback(async () => {
     try {
-      const [prjRes, taskRes, invRes, meetRes, appRes, timeRes] = await Promise.all([
+      const [prjRes, taskRes, invRes, meetRes, appRes, timeRes, notifRes] = await Promise.all([
         api.get('/projects?limit=1000'),
         api.get('/tasks'),
         api.get('/invoices').catch(() => ({ data: { data: [] } })),
         api.get('/meetings').catch(() => ({ data: { data: [] } })),
         api.get('/approvals').catch(() => ({ data: { data: [] } })),
         api.get('/timelogs').catch(() => ({ data: { data: [] } })),
+        api.get('/notifications?limit=5').catch(() => ({ data: { data: { items: [] } } })),
       ]);
 
       setProjects(prjRes.data.data?.items ?? []);
@@ -154,6 +174,7 @@ export function DashboardPage() {
       setApprovals(approvalsArray);
 
       setTimeLogs(timeRes.data?.data ?? []);
+      setNotificationsList(notifRes.data?.data?.items ?? []);
     } catch (err) {
       console.error('Failed to load dashboard statistics:', err);
       notify({
@@ -1549,38 +1570,105 @@ export function DashboardPage() {
                     <h2 className="text-sm font-bold uppercase tracking-wider text-foreground/55 flex items-center gap-1.5">
                       <Bell className="h-4 w-4 text-primary" /> {widget.title}
                     </h2>
-                    {collapseToggle}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => navigate('/notifications')}
+                        className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                      >
+                        View All
+                      </button>
+                      {collapseToggle}
+                    </div>
                   </div>
                   {!widget.collapsed && (
                     <div
-                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-3`}
+                      className={`bg-card border border-border rounded-2xl ${padding} shadow-sm space-y-2`}
                     >
-                      <div className="flex gap-3 items-start border-b border-border/60 pb-2 text-xs">
-                        <div className="h-6 w-6 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                          <CheckCircle className="h-3.5 w-3.5" />
+                      {notificationsList.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-foreground/50">
+                          <Bell className="h-6 w-6 mx-auto mb-1 text-foreground/20" />
+                          <p className="font-semibold">No workspace notifications yet</p>
                         </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-foreground">
-                            Task approved by Project Manager
-                          </p>
-                          <span className="text-[10px] text-foreground/45 block mt-0.5">
-                            2 hours ago
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-3 items-start text-xs">
-                        <div className="h-6 w-6 rounded-lg bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0">
-                          <AlertTriangle className="h-3.5 w-3.5" />
-                        </div>
-                        <div className="flex-1">
-                          <p className="font-bold text-foreground">
-                            Upcoming project milestone deadline approaching
-                          </p>
-                          <span className="text-[10px] text-foreground/45 block mt-0.5">
-                            5 hours ago
-                          </span>
-                        </div>
-                      </div>
+                      ) : (
+                        notificationsList.map((item) => {
+                          const { moduleLabel, moduleColor } = getNotificationIconDetails(
+                            item.notification.type,
+                            item.notification.event,
+                          );
+                          const actionUrl = getNotificationActionUrl(
+                            item.notification.event,
+                            item.notification.data,
+                          );
+
+                          const ev = (item.notification.event || '').toLowerCase();
+                          const type = item.notification.type;
+                          const sizeClass = 'h-3.5 w-3.5';
+
+                          let iconElement = <Info className={sizeClass} />;
+                          if (ev.startsWith('auth')) iconElement = <User className={sizeClass} />;
+                          else if (ev.startsWith('crm'))
+                            iconElement = <Handshake className={sizeClass} />;
+                          else if (ev.startsWith('project'))
+                            iconElement = <Folder className={sizeClass} />;
+                          else if (ev.startsWith('invoice'))
+                            iconElement = <Receipt className={sizeClass} />;
+                          else if (ev.startsWith('quotation'))
+                            iconElement = <ScrollText className={sizeClass} />;
+                          else if (ev.startsWith('task'))
+                            iconElement = <CheckSquare className={sizeClass} />;
+                          else if (ev.startsWith('meeting'))
+                            iconElement = <Calendar className={sizeClass} />;
+                          else if (ev.startsWith('amc'))
+                            iconElement = <Wrench className={sizeClass} />;
+                          else if (type === 'SUCCESS')
+                            iconElement = <CheckCircle className={sizeClass} />;
+                          else if (type === 'WARNING')
+                            iconElement = <AlertTriangle className={sizeClass} />;
+                          else if (type === 'ERROR')
+                            iconElement = <XCircle className={sizeClass} />;
+
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={async () => {
+                                if (!item.isRead) {
+                                  await api
+                                    .patch(`/notifications/${item.id}/read`)
+                                    .catch(() => null);
+                                }
+                                navigate(actionUrl);
+                              }}
+                              className="flex gap-3 items-start border-b border-border/60 last:border-b-0 pb-2.5 last:pb-0 text-xs cursor-pointer hover:bg-muted/30 p-2 rounded-xl transition"
+                            >
+                              <div
+                                className={`h-7 w-7 rounded-xl flex items-center justify-center shrink-0 border mt-0.5 ${moduleColor}`}
+                              >
+                                {iconElement}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between gap-1 mb-0.5">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-foreground/50">
+                                    {moduleLabel}
+                                  </span>
+                                  <span className="text-[10px] font-medium text-foreground/45">
+                                    {formatRelativeTime(item.createdAt)}
+                                  </span>
+                                </div>
+                                <p className="font-bold text-foreground line-clamp-1">
+                                  {item.notification.title}
+                                </p>
+                                <p className="text-xs text-foreground/65 line-clamp-1 mt-0.5">
+                                  {item.notification.message}
+                                </p>
+                              </div>
+                              {!item.isRead && (
+                                <span className="h-2 w-2 shrink-0 rounded-full bg-primary mt-2" />
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   )}
                 </div>

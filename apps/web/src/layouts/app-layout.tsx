@@ -22,6 +22,7 @@ import { useThemeStore } from '../stores/theme-store';
 import { Button } from '../components/ui/button';
 import { navItems } from '../nav';
 import { api } from '../lib/api';
+import { NotificationBell } from '../components/notifications/notification-bell';
 
 type WorkspaceAccent = 'emerald' | 'blue' | 'rose' | 'amber';
 type WorkspaceDensity = 'comfortable' | 'compact';
@@ -192,12 +193,12 @@ export function AppLayout() {
 
   const sidebar = (
     <aside
-      className={`flex h-full flex-col bg-[#0b0f19] text-slate-300 border-r border-white/5 transition-all duration-300 ${
+      className={`flex h-full flex-col bg-[#0b0f19] text-slate-300 transition-all duration-300 overflow-x-hidden ${
         isCollapsed ? 'lg:w-[76px] w-72' : 'w-[260px]'
       }`}
     >
       {/* Brand Header */}
-      <div className="flex h-16 items-center px-5 border-b border-white/5 shrink-0 justify-between">
+      <div className="flex h-16 items-center px-5 shrink-0 justify-between">
         {isCollapsed ? (
           <img
             src="/icon.jpg"
@@ -217,7 +218,7 @@ export function AppLayout() {
       </div>
 
       {/* Navigation menu */}
-      <nav className="flex-1 overflow-y-auto py-4 px-3 space-y-1.5 scrollbar-thin">
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-3 space-y-1 no-scrollbar">
         {visibleNavItems.map((item) => (
           <NavLink
             key={item.href}
@@ -241,7 +242,7 @@ export function AppLayout() {
       </nav>
 
       {/* Sidebar Footer */}
-      <div className="p-3 border-t border-white/5 space-y-2 shrink-0">
+      <div className="p-3 space-y-2 shrink-0">
         {/* Toggle Collapse - Desktop only */}
         <button
           onClick={handleToggleSidebar}
@@ -384,14 +385,7 @@ export function AppLayout() {
             </div>
 
             {/* Notifications Trigger */}
-            <button
-              aria-label="Notifications"
-              className="rounded-xl p-2.5 text-foreground hover:bg-muted transition-colors border border-border relative"
-              type="button"
-            >
-              <Bell className="h-4 w-4" />
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-danger animate-pulse" />
-            </button>
+            <NotificationBell />
 
             {/* Theme Toggle */}
             <button
@@ -685,24 +679,6 @@ export function AppLayout() {
           </div>
           <Outlet />
         </main>
-
-        <footer className="border-t border-border px-6 py-5 text-xs text-foreground/40 font-bold flex justify-between items-center shrink-0">
-          <span>ClientFlow Agency Platform</span>
-          <div className="flex gap-4">
-            <a
-              href="#support"
-              className="hover:text-foreground transition-colors flex items-center gap-1"
-            >
-              <HelpCircle className="h-3.5 w-3.5" /> Help
-            </a>
-            <a
-              href="#settings"
-              className="hover:text-foreground transition-colors flex items-center gap-1"
-            >
-              <Settings className="h-3.5 w-3.5" /> Settings
-            </a>
-          </div>
-        </footer>
       </div>
     </div>
   );

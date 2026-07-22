@@ -10,6 +10,7 @@ import {
   UsersRound,
   Clock,
   ShieldCheck,
+  Bell,
 } from 'lucide-react';
 
 import type { Role } from '@clientflow/types';
@@ -30,6 +31,12 @@ export const navItems: NavItem[] = [
     href: '/portal',
     icon: ShieldCheck,
     roles: ['CLIENT'],
+  },
+  {
+    label: 'Notifications',
+    href: '/notifications',
+    icon: Bell,
+    roles: ['ADMIN', 'STAFF', 'CLIENT'],
   },
   { label: 'Tasks', href: '/tasks', icon: ListTodo, roles: ['ADMIN', 'STAFF'] },
   { label: 'Timesheets', href: '/timesheets', icon: Clock, roles: ['ADMIN', 'STAFF'] },

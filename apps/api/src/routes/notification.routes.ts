@@ -18,6 +18,14 @@ notificationRoutes.post('/reminders', requireRole('ADMIN'), (req, res, next) =>
 );
 
 // User notification management
+notificationRoutes.get('/count', (req, res, next) =>
+  notificationController.getUnreadCount(req, res).catch(next),
+);
+
+notificationRoutes.get('/unread', (req, res, next) =>
+  notificationController.getUnreadNotifications(req, res).catch(next),
+);
+
 notificationRoutes.get('/', (req, res, next) =>
   notificationController.listUserNotifications(req, res).catch(next),
 );
@@ -26,12 +34,32 @@ notificationRoutes.patch('/read-all', (req, res, next) =>
   notificationController.markAllAsRead(req, res).catch(next),
 );
 
+notificationRoutes.post('/bulk-read', (req, res, next) =>
+  notificationController.bulkMarkAsRead(req, res).catch(next),
+);
+
+notificationRoutes.post('/bulk-delete', (req, res, next) =>
+  notificationController.bulkDeleteRecipients(req, res).catch(next),
+);
+
+notificationRoutes.delete('/read', (req, res, next) =>
+  notificationController.clearReadNotifications(req, res).catch(next),
+);
+
 notificationRoutes.get('/:id', (req, res, next) =>
   notificationController.getNotification(req, res).catch(next),
 );
 
 notificationRoutes.patch('/:id/read', (req, res, next) =>
   notificationController.markAsRead(req, res).catch(next),
+);
+
+notificationRoutes.patch('/:id/unread', (req, res, next) =>
+  notificationController.markAsUnread(req, res).catch(next),
+);
+
+notificationRoutes.delete('/:id', (req, res, next) =>
+  notificationController.deleteRecipient(req, res).catch(next),
 );
 
 notificationRoutes.patch('/:id/archive', (req, res, next) =>

@@ -1,6 +1,7 @@
 import PDFDocument from 'pdfkit';
 import type { Response } from 'express';
 import { PassThrough } from 'node:stream';
+import { companyConfig } from '../config/company.config';
 
 /* ─────────────────────────────────────────────────────────────────────────────
    generateQuotationPdfToStream
@@ -53,14 +54,7 @@ export async function generateQuotationPdfToStream(
   const SAFE_Y = PH - M - FOOTER_H;
 
   // ── Company Info (env-configurable) ───────────────────────────────────────
-  const co = {
-    name: process.env.COMPANY_NAME || 'Your Company',
-    address: process.env.COMPANY_ADDRESS || 'Address, City, State',
-    phone: process.env.COMPANY_PHONE || '+91 0000000000',
-    email: process.env.COMPANY_EMAIL || 'contact@yourcompany.com',
-    website: process.env.COMPANY_WEBSITE || 'www.yourcompany.com',
-    gst: process.env.COMPANY_GST || '',
-  };
+  const co = companyConfig;
 
   // ── Billing Plan Draft (JSON field on Quotation) ──────────────────────────
   type StageDraft = { name: string; percentage: number; amount: number; dueDate?: string | null };

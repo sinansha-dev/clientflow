@@ -5,6 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClientFlow</title>
     <link rel="icon" type="image/jpeg" href="/icon.jpg" />
+    <script>
+      (function() {
+        try {
+          const accents = {
+            emerald: '152 69% 45%',
+            blue: '217 91% 56%',
+            rose: '346 72% 74%',
+            amber: '38 92% 50%'
+          };
+          const savedAccent = localStorage.getItem('workspace-accent');
+          if (savedAccent && accents[savedAccent]) {
+            document.documentElement.style.setProperty('--primary', accents[savedAccent]);
+          }
+          const savedDensity = localStorage.getItem('workspace-density');
+          if (savedDensity) {
+            document.documentElement.dataset.density = savedDensity;
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

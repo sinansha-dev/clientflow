@@ -8,6 +8,7 @@ import type {
 import { prisma } from '../config/prisma';
 import { notificationRepository } from '../repositories/notification.repository';
 import { notificationPreferenceRepository } from '../repositories/notification-preference.repository';
+import { emailQueueService } from './email-queue.service';
 import { emailService } from './email.service';
 import { emailTemplateEngine, type EmailTemplateData } from './email/email-template.engine';
 import { logger } from '../utils/logger';
@@ -233,23 +234,18 @@ export const notificationService = {
 
         for (const target of emailTargets) {
           try {
-            const emailRes = await emailService.sendEmail({
-              to: target.email,
+            emailQueueService.enqueue({
+              recipient: target.email,
               subject,
               html: htmlContent,
               text: textContent,
               attachments: emailOptions?.attachments,
+              priority: priority as any,
+              event,
             });
-            emailResults.push(emailRes);
-            if (!emailRes.success && emailRes.error) {
-              errors.push(`Email to ${target.email} failed: ${emailRes.error}`);
-            }
           } catch (mailErr: any) {
-            const mailErrorMsg = `Email dispatch exception for ${target.email}: ${mailErr?.message || mailErr}`;
-            logger.error(
-              { error: mailErrorMsg, recipient: target.email },
-              'Email dispatch failure',
-            );
+            const mailErrorMsg = `Email queueing exception for ${target.email}: ${mailErr?.message || mailErr}`;
+            logger.error({ error: mailErrorMsg, recipient: target.email }, 'Email queue error');
             errors.push(mailErrorMsg);
           }
         }

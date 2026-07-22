@@ -25,23 +25,47 @@ export const notificationController = {
     return ok(res, 'Scheduled reminder notifications processed successfully', results);
   },
 
+  async getUnreadCount(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const count = await notificationRepository.getUnreadCount(userId);
+    return ok(res, 'Unread count retrieved', { count });
+  },
+
+  async getUnreadNotifications(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 10;
+    const result = await notificationRepository.listForUser({
+      userId,
+      isRead: false,
+      isArchived: false,
+      page: 1,
+      limit,
+    });
+    return ok(res, 'Unread notifications retrieved', result);
+  },
+
   async listUserNotifications(req: Request, res: Response) {
     const userId = req.user!.id;
     const isRead = req.query.isRead !== undefined ? req.query.isRead === 'true' : undefined;
     const isArchived = req.query.isArchived !== undefined ? req.query.isArchived === 'true' : false;
+    const type = req.query.type as any;
+    const moduleName = req.query.module as string | undefined;
+    const search = req.query.search as string | undefined;
     const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
     const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
 
     const params: Parameters<typeof notificationRepository.listForUser>[0] = {
       userId,
       isArchived,
+      type,
+      module: moduleName,
+      search,
       page,
       limit,
     };
     if (isRead !== undefined) params.isRead = isRead;
 
     const result = await notificationRepository.listForUser(params);
-
     return ok(res, 'Notifications retrieved', result);
   },
 
@@ -74,10 +98,52 @@ export const notificationController = {
     return ok(res, 'Notification marked as read');
   },
 
+  async markAsUnread(req: Request, res: Response) {
+    const recipientId = req.params.id || '';
+    if (!recipientId) throw notFound('Recipient ID required');
+    const userId = req.user!.id;
+
+    await notificationRepository.markAsUnread(recipientId, userId);
+    return ok(res, 'Notification marked as unread');
+  },
+
   async markAllAsRead(req: Request, res: Response) {
     const userId = req.user!.id;
     await notificationRepository.markAllAsRead(userId);
     return ok(res, 'All notifications marked as read');
+  },
+
+  async bulkMarkAsRead(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const { ids } = req.body as { ids?: string[] };
+    if (Array.isArray(ids) && ids.length > 0) {
+      await notificationRepository.bulkMarkAsRead(ids, userId);
+    }
+    return ok(res, 'Bulk notifications marked as read');
+  },
+
+  async deleteRecipient(req: Request, res: Response) {
+    const recipientId = req.params.id || '';
+    if (!recipientId) throw notFound('Recipient ID required');
+    const userId = req.user!.id;
+
+    await notificationRepository.deleteRecipient(recipientId, userId);
+    return ok(res, 'Notification deleted');
+  },
+
+  async bulkDeleteRecipients(req: Request, res: Response) {
+    const userId = req.user!.id;
+    const { ids } = req.body as { ids?: string[] };
+    if (Array.isArray(ids) && ids.length > 0) {
+      await notificationRepository.bulkDeleteRecipients(ids, userId);
+    }
+    return ok(res, 'Notifications deleted');
+  },
+
+  async clearReadNotifications(req: Request, res: Response) {
+    const userId = req.user!.id;
+    await notificationRepository.clearReadNotifications(userId);
+    return ok(res, 'Read notifications cleared');
   },
 
   async archiveNotification(req: Request, res: Response) {

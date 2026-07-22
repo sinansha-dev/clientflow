@@ -149,6 +149,7 @@ function Field({
   required,
   placeholder,
   className = '',
+  disabled,
 }: {
   label: string;
   value: string | number;
@@ -157,6 +158,7 @@ function Field({
   required?: boolean;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className={`grid gap-1 text-xs font-bold text-foreground/60 ${className}`}>
@@ -166,8 +168,9 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
+        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </label>
   );
@@ -180,6 +183,7 @@ function SelectField({
   options,
   required,
   className = '',
+  disabled,
 }: {
   label: string;
   value: string;
@@ -187,6 +191,7 @@ function SelectField({
   options: [string, string][];
   required?: boolean;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <label className={`grid gap-1 text-xs font-bold text-foreground/60 ${className}`}>
@@ -194,8 +199,9 @@ function SelectField({
       {required && <span className="inline text-danger"> *</span>}
       <select
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary"
+        className="h-10 rounded-xl border border-border bg-background px-3 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 disabled:cursor-not-allowed"
       >
         <option value="">Select</option>
         {options.map(([v, l]) => (
@@ -214,22 +220,25 @@ function Textarea({
   onChange,
   placeholder,
   rows = 5,
+  disabled,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   rows?: number;
+  disabled?: boolean;
 }) {
   return (
     <label className="grid gap-1 text-xs font-bold text-foreground/60 w-full">
       {label}
       <textarea
         value={value}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         rows={rows}
-        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary resize-y leading-relaxed"
+        className="w-full rounded-xl border border-border bg-background px-3 py-2.5 text-sm text-foreground outline-none transition focus:border-primary resize-y leading-relaxed disabled:opacity-60 disabled:cursor-not-allowed"
       />
     </label>
   );
@@ -281,6 +290,9 @@ export function QuotationEditorPage() {
   const [retainerStart, setRetainerStart] = useState(today);
   const [retainerDuration, setRetainerDuration] = useState(12);
   const [amcInterval, setAmcInterval] = useState('MONTHLY');
+
+  // ── Locked State ──
+  const isLocked = isEditing && (status === 'ACCEPTED' || status === 'APPROVED');
 
   // ── Section 5: Terms ──
   const [termsConditions, setTermsConditions] = useState('');
@@ -560,12 +572,18 @@ export function QuotationEditorPage() {
         <div>
           <p className="text-sm text-foreground/55">Finance / Quotations</p>
           <h1 className="mt-2 text-2xl font-bold text-foreground">
-            {isEditing ? `Edit Quotation — ${quoteNumber}` : 'New Quotation'}
+            {isEditing
+              ? isLocked
+                ? `View Quotation — ${quoteNumber}`
+                : `Edit Quotation — ${quoteNumber}`
+              : 'New Quotation'}
           </h1>
           <p className="mt-1 text-sm text-foreground/55">
-            {isEditing
-              ? 'Update the quotation details and billing plan.'
-              : 'Create a professional quotation with a billing plan for your client.'}
+            {isLocked
+              ? 'View approved quotation details and billing plan.'
+              : isEditing
+                ? 'Update the quotation details and billing plan.'
+                : 'Create a professional quotation with a billing plan for your client.'}
           </p>
         </div>
         <button
@@ -576,6 +594,15 @@ export function QuotationEditorPage() {
           <X className="h-4 w-4" /> Cancel
         </button>
       </div>
+
+      {isLocked && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 px-4 py-3.5 text-amber-600 dark:text-amber-400">
+          <AlertCircle className="h-5 w-5 shrink-0" />
+          <p className="text-sm font-semibold leading-relaxed">
+            This quotation has been approved and is locked. It cannot be modified.
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
         {/* ── Left: Form Sections ── */}
@@ -590,6 +617,7 @@ export function QuotationEditorPage() {
               <SelectField
                 label="Client"
                 value={clientId}
+                disabled={isLocked}
                 onChange={(v) => {
                   setClientId(v);
                   setProjectId('');
@@ -600,6 +628,7 @@ export function QuotationEditorPage() {
               <SelectField
                 label="Project"
                 value={projectId}
+                disabled={isLocked}
                 onChange={setProjectId}
                 options={[
                   ['', 'No project (new)'] as [string, string],
@@ -611,25 +640,35 @@ export function QuotationEditorPage() {
                 value={quoteNumber}
                 onChange={() => {}}
                 className="opacity-60"
+                disabled
               />
               <Field
                 label="Title"
                 value={title}
+                disabled={isLocked}
                 onChange={setTitle}
                 required
                 placeholder="e.g. E-Commerce Website Development"
               />
-              <Field label="Quote Date" type="date" value={quoteDate} onChange={setQuoteDate} />
+              <Field
+                label="Quote Date"
+                type="date"
+                value={quoteDate}
+                disabled={isLocked}
+                onChange={setQuoteDate}
+              />
               <Field
                 label="Valid Until"
                 type="date"
                 value={validUntil}
+                disabled={isLocked}
                 onChange={setValidUntil}
                 required
               />
               <SelectField
                 label="Currency"
                 value={currency}
+                disabled={isLocked}
                 onChange={setCurrency}
                 options={[
                   ['USD', 'USD — US Dollar'],
@@ -642,6 +681,7 @@ export function QuotationEditorPage() {
               <SelectField
                 label="Status"
                 value={status}
+                disabled={isLocked}
                 onChange={setStatus}
                 options={[
                   ['DRAFT', 'Draft'],
@@ -655,6 +695,7 @@ export function QuotationEditorPage() {
                 <Textarea
                   label="Short Description"
                   value={description}
+                  disabled={isLocked}
                   onChange={setDescription}
                   placeholder="Brief overview of this quotation..."
                   rows={2}
@@ -705,16 +746,18 @@ export function QuotationEditorPage() {
                         <input
                           type="text"
                           value={item.name}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'name', e.target.value)}
                           placeholder="Service name"
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                         <input
                           type="text"
                           value={item.description}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'description', e.target.value)}
                           placeholder="Description (optional)"
-                          className="mt-1 w-full rounded-lg border border-transparent bg-muted/30 px-2.5 py-1 text-xs text-foreground/60 outline-none focus:border-border"
+                          className="mt-1 w-full rounded-lg border border-transparent bg-muted/30 px-2.5 py-1 text-xs text-foreground/60 outline-none focus:border-border disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -722,10 +765,11 @@ export function QuotationEditorPage() {
                           type="number"
                           value={item.quantity}
                           min={1}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'quantity', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -733,10 +777,11 @@ export function QuotationEditorPage() {
                           type="number"
                           value={item.unitPrice}
                           min={0}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'unitPrice', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -745,8 +790,9 @@ export function QuotationEditorPage() {
                           value={item.taxRate}
                           min={0}
                           max={100}
+                          disabled={isLocked}
                           onChange={(e) => updateItem(item._key, 'taxRate', Number(e.target.value))}
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2 pr-2">
@@ -754,35 +800,38 @@ export function QuotationEditorPage() {
                           type="number"
                           value={item.discount}
                           min={0}
+                          disabled={isLocked}
                           onChange={(e) =>
                             updateItem(item._key, 'discount', Number(e.target.value))
                           }
-                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                          className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                         />
                       </td>
                       <td className="py-2 text-right font-bold text-foreground">
                         {money(itemTotal(item), currency)}
                       </td>
                       <td className="py-2 pl-2">
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                          <button
-                            type="button"
-                            onClick={() => duplicateItem(item._key)}
-                            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-foreground/50 hover:text-foreground transition"
-                            title="Duplicate"
-                          >
-                            <Copy className="h-3.5 w-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => removeItem(item._key)}
-                            disabled={items.length === 1}
-                            className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/50 hover:text-danger transition disabled:opacity-30"
-                            title="Remove"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        </div>
+                        {!isLocked && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                            <button
+                              type="button"
+                              onClick={() => duplicateItem(item._key)}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-muted text-foreground/50 hover:text-foreground transition"
+                              title="Duplicate"
+                            >
+                              <Copy className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeItem(item._key)}
+                              disabled={items.length === 1}
+                              className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/50 hover:text-danger transition disabled:opacity-30"
+                              title="Remove"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -791,23 +840,26 @@ export function QuotationEditorPage() {
             </div>
 
             <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={addItem}
-                className="border border-dashed border-border text-sm gap-1.5"
-              >
-                <Plus className="h-4 w-4" /> Add Item
-              </Button>
-              <div className="flex items-center gap-3 text-sm">
+              {!isLocked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={addItem}
+                  className="border border-dashed border-border text-sm gap-1.5"
+                >
+                  <Plus className="h-4 w-4" /> Add Item
+                </Button>
+              )}
+              <div className="flex items-center gap-3 text-sm ml-auto">
                 <label className="text-xs font-bold text-foreground/60">
                   Global Discount
                   <input
                     type="number"
                     value={globalDiscount}
                     min={0}
+                    disabled={isLocked}
                     onChange={(e) => setGlobalDiscount(Number(e.target.value))}
-                    className="ml-2 w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right text-foreground outline-none focus:border-primary"
+                    className="ml-2 w-28 rounded-lg border border-border bg-background px-2.5 py-1.5 text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                   />
                 </label>
               </div>
@@ -824,6 +876,7 @@ export function QuotationEditorPage() {
             <Textarea
               label="Scope of Work, Deliverables, Assumptions, Out of Scope, Client Responsibilities"
               value={scope}
+              disabled={isLocked}
               onChange={setScope}
               placeholder={`Scope of Work:\n- Design and development of a responsive e-commerce website\n\nDeliverables:\n- Wireframes & UI designs\n- Frontend & backend development\n- Deployment to production\n\nAssumptions:\n- Client will provide content within 5 business days\n\nOut of Scope:\n- Mobile app development\n\nClient Responsibilities:\n- Timely feedback and approvals`}
               rows={12}
@@ -842,12 +895,13 @@ export function QuotationEditorPage() {
                 <button
                   key={t}
                   type="button"
+                  disabled={isLocked}
                   onClick={() => setBillingType(t)}
                   className={`rounded-xl border px-3 py-2.5 text-xs font-bold text-center transition ${
                     billingType === t
                       ? 'border-primary bg-primary/10 text-primary'
                       : 'border-border text-foreground/60 hover:border-primary/50 hover:text-foreground'
-                  }`}
+                  } disabled:opacity-60 disabled:cursor-not-allowed`}
                 >
                   {BILLING_TYPE_LABELS[t]}
                 </button>
@@ -893,9 +947,10 @@ export function QuotationEditorPage() {
                               <input
                                 type="text"
                                 value={stage.name}
+                                disabled={isLocked}
                                 onChange={(e) => updateStage(stage._key, 'name', e.target.value)}
                                 placeholder="e.g. Design Approved"
-                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                               />
                             </td>
                             <td className="py-2 pr-3">
@@ -904,10 +959,11 @@ export function QuotationEditorPage() {
                                 value={stage.percentage}
                                 min={0}
                                 max={100}
+                                disabled={isLocked}
                                 onChange={(e) =>
                                   updateStage(stage._key, 'percentage', Number(e.target.value))
                                 }
-                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary"
+                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-right text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                               />
                             </td>
                             <td className="py-2 pr-3 text-right font-bold text-foreground">
@@ -917,19 +973,22 @@ export function QuotationEditorPage() {
                               <input
                                 type="date"
                                 value={stage.dueDate}
+                                disabled={isLocked}
                                 onChange={(e) => updateStage(stage._key, 'dueDate', e.target.value)}
-                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary"
+                                className="w-full rounded-lg border border-border bg-background px-2.5 py-1.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                               />
                             </td>
                             <td className="py-2">
-                              <button
-                                type="button"
-                                onClick={() => removeStage(stage._key)}
-                                disabled={billingStages.length <= 1}
-                                className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/40 hover:text-danger transition disabled:opacity-30"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
+                              {!isLocked && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeStage(stage._key)}
+                                  disabled={billingStages.length <= 1}
+                                  className="h-7 w-7 flex items-center justify-center rounded-lg hover:bg-danger/10 text-foreground/40 hover:text-danger transition disabled:opacity-30"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -939,16 +998,18 @@ export function QuotationEditorPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={addStage}
-                    className="border border-dashed border-border text-sm gap-1.5"
-                  >
-                    <Plus className="h-4 w-4" /> Add Stage
-                  </Button>
+                  {!isLocked && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={addStage}
+                      className="border border-dashed border-border text-sm gap-1.5"
+                    >
+                      <Plus className="h-4 w-4" /> Add Stage
+                    </Button>
+                  )}
                   <div
-                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold ${
+                    className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-bold ml-auto ${
                       billingPctTotal === 100
                         ? 'bg-emerald-500/10 text-emerald-600'
                         : 'bg-danger/10 text-danger'
@@ -972,18 +1033,21 @@ export function QuotationEditorPage() {
                   label="Monthly Amount"
                   type="number"
                   value={monthlyAmount}
+                  disabled={isLocked}
                   onChange={(v) => setMonthlyAmount(Number(v))}
                 />
                 <Field
                   label="Start Date"
                   type="date"
                   value={retainerStart}
+                  disabled={isLocked}
                   onChange={setRetainerStart}
                 />
                 <Field
                   label="Duration (months)"
                   type="number"
                   value={retainerDuration}
+                  disabled={isLocked}
                   onChange={(v) => setRetainerDuration(Number(v))}
                 />
               </div>
@@ -995,6 +1059,7 @@ export function QuotationEditorPage() {
                 <SelectField
                   label="Billing Interval"
                   value={amcInterval}
+                  disabled={isLocked}
                   onChange={setAmcInterval}
                   options={[
                     ['MONTHLY', 'Monthly'],
@@ -1006,12 +1071,14 @@ export function QuotationEditorPage() {
                   label="Amount per Interval"
                   type="number"
                   value={monthlyAmount}
+                  disabled={isLocked}
                   onChange={(v) => setMonthlyAmount(Number(v))}
                 />
                 <Field
                   label="Start Date"
                   type="date"
                   value={retainerStart}
+                  disabled={isLocked}
                   onChange={setRetainerStart}
                 />
               </div>
@@ -1028,6 +1095,7 @@ export function QuotationEditorPage() {
             <Textarea
               label="Terms & Conditions"
               value={termsConditions}
+              disabled={isLocked}
               onChange={setTermsConditions}
               placeholder={`Payment Terms:\nPayment is due within 30 days of invoice date.\n\nSupport Period:\n3 months of bug-fix support included post-delivery.\n\nRevision Policy:\nUp to 3 rounds of revisions per design phase.\n\nWarranty:\nWe guarantee the delivered software will be free of critical defects for 60 days.\n\nCancellation Policy:\nAdvance payments are non-refundable after work begins.`}
               rows={10}
@@ -1036,6 +1104,7 @@ export function QuotationEditorPage() {
               <Textarea
                 label="Additional Notes (visible on quotation document)"
                 value={notes}
+                disabled={isLocked}
                 onChange={setNotes}
                 placeholder="Any additional notes for the client..."
                 rows={3}
@@ -1056,12 +1125,14 @@ export function QuotationEditorPage() {
                   <Field
                     label={i === 0 ? 'File Name' : ''}
                     value={att.name}
+                    disabled={isLocked}
                     onChange={(v) => updateAttachment(i, 'name', v)}
                     placeholder="Proposal.pdf"
                   />
                   <Field
                     label={i === 0 ? 'URL / Link' : ''}
                     value={att.url}
+                    disabled={isLocked}
                     onChange={(v) => updateAttachment(i, 'url', v)}
                     placeholder="https://..."
                   />
@@ -1069,8 +1140,9 @@ export function QuotationEditorPage() {
                     {i === 0 && <p className="text-xs font-bold text-foreground/60 mb-1">Type</p>}
                     <select
                       value={att.type}
+                      disabled={isLocked}
                       onChange={(e) => updateAttachment(i, 'type', e.target.value)}
-                      className="h-10 rounded-xl border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                      className="h-10 rounded-xl border border-border bg-background px-2.5 text-sm text-foreground outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                     >
                       {(['PDF', 'DOC', 'MOCKUP', 'CONTRACT', 'REQUIREMENT', 'OTHER'] as const).map(
                         (t) => (
@@ -1081,23 +1153,27 @@ export function QuotationEditorPage() {
                       )}
                     </select>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(i)}
-                    className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-danger/10 text-foreground/40 hover:text-danger transition"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
+                  {!isLocked && (
+                    <button
+                      type="button"
+                      onClick={() => removeAttachment(i)}
+                      className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-danger/10 text-foreground/40 hover:text-danger transition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               ))}
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={addAttachment}
-                className="border border-dashed border-border text-sm gap-1.5 w-fit"
-              >
-                <Plus className="h-4 w-4" /> Add Attachment
-              </Button>
+              {!isLocked && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={addAttachment}
+                  className="border border-dashed border-border text-sm gap-1.5 w-fit"
+                >
+                  <Plus className="h-4 w-4" /> Add Attachment
+                </Button>
+              )}
             </div>
           </Section>
 
@@ -1111,6 +1187,7 @@ export function QuotationEditorPage() {
             <Textarea
               label="Internal Notes"
               value={internalNotes}
+              disabled={isLocked}
               onChange={setInternalNotes}
               placeholder="e.g. Client negotiated a 5% discount. Follow up if not accepted by end of month..."
               rows={5}
@@ -1127,16 +1204,7 @@ export function QuotationEditorPage() {
             >
               <X className="h-4 w-4" /> Cancel
             </Button>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => save('DRAFT')}
-                disabled={saving}
-                className="border border-border gap-1.5"
-              >
-                <Save className="h-4 w-4" /> Save Draft
-              </Button>
+            <div className="flex flex-wrap gap-2 items-center">
               <Button
                 type="button"
                 variant="ghost"
@@ -1145,14 +1213,31 @@ export function QuotationEditorPage() {
               >
                 <Eye className="h-4 w-4" /> Preview
               </Button>
-              <Button
-                type="button"
-                onClick={() => save('SENT')}
-                disabled={saving}
-                className="gap-1.5"
-              >
-                <Send className="h-4 w-4" /> {saving ? 'Saving...' : 'Send to Client'}
-              </Button>
+              {isLocked ? (
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-3.5 py-2 rounded-lg border border-amber-500/20">
+                  <Lock className="h-4 w-4" /> Approved & Locked
+                </span>
+              ) : (
+                <>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => save('DRAFT')}
+                    disabled={saving}
+                    className="border border-border gap-1.5"
+                  >
+                    <Save className="h-4 w-4" /> Save Draft
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => save('SENT')}
+                    disabled={saving}
+                    className="gap-1.5"
+                  >
+                    <Send className="h-4 w-4" /> {saving ? 'Saving...' : 'Send to Client'}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </div>

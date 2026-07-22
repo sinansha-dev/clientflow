@@ -26,6 +26,8 @@ import { QuotationEditorPage } from './pages/finance/quotation-editor';
 import { InvoiceEditorPage } from './pages/finance/invoice-editor';
 import { ClientPortalPage } from './pages/portal/client-portal';
 
+import { NotificationsPage } from './pages/notifications/notifications-page';
+
 const staffOnly = ['ADMIN', 'STAFF'] as const;
 
 export const router = createBrowserRouter([
@@ -182,6 +184,7 @@ export const router = createBrowserRouter([
           </ProtectedRoute>
         ),
       },
+      { path: '/notifications', element: <NotificationsPage /> },
       { path: '/profile', element: <ProfilePage /> },
       {
         path: '/users',

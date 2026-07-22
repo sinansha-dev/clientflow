@@ -1,5 +1,6 @@
 import type { Prisma, Role } from '@prisma/client';
 import { prisma } from '../config/prisma';
+import { badRequest } from '../utils/errors';
 
 const money = (value: number) => Math.round(value * 100) / 100;
 
@@ -220,6 +221,11 @@ export const financeRepository = {
       include: { items: true },
     });
     if (!existing) return null;
+
+    if (existing.status === 'ACCEPTED' || existing.status === 'APPROVED') {
+      throw badRequest('Quotation is locked after approval and cannot be modified.');
+    }
+
     const calculated = items ? totals(items, rest.discount ?? existing.discount) : null;
     return prisma.$transaction(async (tx) => {
       if (calculated) {
@@ -249,6 +255,13 @@ export const financeRepository = {
       const hasAccess = await AuthorizationService.canAccessQuotation(id, currentUser);
       if (!hasAccess) return null;
     }
+    const existing = await prisma.quotation.findFirst({ where: { id, deletedAt: null } });
+    if (!existing) return null;
+
+    if (existing.status === 'ACCEPTED' || existing.status === 'APPROVED') {
+      throw badRequest('Quotation is locked after approval and cannot be deleted.');
+    }
+
     return prisma.quotation.update({ where: { id }, data: { deletedAt: new Date() } });
   },
 

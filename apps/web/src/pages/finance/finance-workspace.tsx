@@ -654,80 +654,87 @@ function QuotationTable({
               </td>
             </tr>
           ) : (
-            quotations.map((q) => (
-              <tr key={q.id} className="border-b border-border hover:bg-muted/5 transition">
-                <td className="p-4 font-bold text-foreground">
-                  {q.quoteNumber}
-                  <div className="font-normal text-xs text-foreground/55">{q.title}</div>
-                </td>
-                <td className="text-foreground/80">{q.client?.companyName}</td>
-                <td>
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                      q.status === 'ACCEPTED'
-                        ? 'bg-emerald-500/10 text-emerald-600'
-                        : q.status === 'SENT'
-                          ? 'bg-blue-500/10 text-blue-600'
-                          : q.status === 'REJECTED'
-                            ? 'bg-danger/10 text-danger'
-                            : 'bg-amber-500/10 text-amber-600'
-                    }`}
-                  >
-                    {q.status}
-                  </span>
-                </td>
-                <td className="font-bold text-foreground">{money(q.total)}</td>
-                <td className="text-foreground/60">
-                  {new Date(q.validUntil).toLocaleDateString()}
-                </td>
-                <td className="flex items-center gap-2 py-3">
-                  <Button
-                    className="h-8 w-8 p-0"
-                    variant="ghost"
-                    onClick={() => onEdit(q.id)}
-                    title="Edit quotation"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <a
-                    href={`${api.defaults.baseURL}/quotations/${q.id}/pdf`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
-                    title="Download PDF"
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </a>
-                  <Button
-                    className="h-8 w-8 p-0"
-                    variant="ghost"
-                    onClick={() => onSend(q.id)}
-                    title="Send quote"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                  </Button>
-                  {q.status !== 'ACCEPTED' && (
-                    <>
-                      <Button
-                        className="h-8 w-8 p-0"
-                        variant="ghost"
-                        onClick={() => onApprove(q.id)}
-                        title="Approve quote"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        className="h-8 px-3 text-xs font-bold"
-                        onClick={() => onConvert(q.id)}
-                        title="Setup project and activate billing plan"
-                      >
-                        Setup Project
-                      </Button>
-                    </>
-                  )}
-                </td>
-              </tr>
-            ))
+            quotations.map((q) => {
+              const isLocked = q.status === 'ACCEPTED' || q.status === 'APPROVED';
+              return (
+                <tr key={q.id} className="border-b border-border hover:bg-muted/5 transition">
+                  <td className="p-4 font-bold text-foreground">
+                    {q.quoteNumber}
+                    <div className="font-normal text-xs text-foreground/55">{q.title}</div>
+                  </td>
+                  <td className="text-foreground/80">{q.client?.companyName}</td>
+                  <td>
+                    <span
+                      className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                        q.status === 'ACCEPTED'
+                          ? 'bg-emerald-500/10 text-emerald-600'
+                          : q.status === 'SENT'
+                            ? 'bg-blue-500/10 text-blue-600'
+                            : q.status === 'REJECTED'
+                              ? 'bg-danger/10 text-danger'
+                              : 'bg-amber-500/10 text-amber-600'
+                      }`}
+                    >
+                      {q.status}
+                    </span>
+                  </td>
+                  <td className="font-bold text-foreground">{money(q.total)}</td>
+                  <td className="text-foreground/60">
+                    {new Date(q.validUntil).toLocaleDateString()}
+                  </td>
+                  <td className="flex items-center gap-2 py-3">
+                    <Button
+                      className="h-8 w-8 p-0"
+                      variant="ghost"
+                      onClick={() => onEdit(q.id)}
+                      title={isLocked ? 'View quotation' : 'Edit quotation'}
+                    >
+                      {isLocked ? (
+                        <Eye className="h-3.5 w-3.5" />
+                      ) : (
+                        <Pencil className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                    <a
+                      href={`${api.defaults.baseURL}/quotations/${q.id}/pdf`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="h-8 w-8 p-0 flex items-center justify-center text-foreground/70 hover:text-foreground hover:bg-muted rounded-md transition"
+                      title="Download PDF"
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </a>
+                    <Button
+                      className="h-8 w-8 p-0"
+                      variant="ghost"
+                      onClick={() => onSend(q.id)}
+                      title="Send quote"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                    </Button>
+                    {q.status !== 'ACCEPTED' && (
+                      <>
+                        <Button
+                          className="h-8 w-8 p-0"
+                          variant="ghost"
+                          onClick={() => onApprove(q.id)}
+                          title="Approve quote"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          className="h-8 px-3 text-xs font-bold"
+                          onClick={() => onConvert(q.id)}
+                          title="Setup project and activate billing plan"
+                        >
+                          Setup Project
+                        </Button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              );
+            })
           )}
         </tbody>
       </table>

@@ -1,4 +1,5 @@
 import { notificationConfig } from '../../config/notification.config';
+import { companyConfig } from '../../config/company.config';
 
 export interface EmailTemplateData {
   recipientName?: string | undefined;
@@ -41,7 +42,8 @@ export interface RenderedEmail {
 
 export const emailTemplateEngine = {
   render(event: string, data: EmailTemplateData = {}): RenderedEmail {
-    const companyName = notificationConfig.smtp.fromName || 'ClientFlow';
+    const companyName =
+      data.companyName || companyConfig.name || notificationConfig.smtp.fromName || 'ClientFlow';
     const recipientName = data.recipientName || 'Valued User';
 
     const subject = this.generateSubject(event, data);
